@@ -9,4 +9,4 @@ set(LWIP_INC "${IDF_PATH}/components/lwip/include")
 include_directories(${LWIP_INC})
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(GSM_SIM7600E)
+project(esp32-sim7600e)
