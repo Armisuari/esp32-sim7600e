@@ -1,453 +1,306 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-P4 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- | -------- | -------- |
+# ESP32 SIM7600E Component
 
-# ESP32 SIM7600E Firmware
+A comprehensive ESP-IDF component for interfacing with SIM7600E cellular and GNSS modules.
 
-ESP32-S3 firmware project for GSM/GPRS connectivity and GNSS positioning using the SIM7600E module. This project provides a complete communication stack for IoT applications requiring cellular connectivity and GPS tracking.
+## Features
 
-## 📋 Table of Contents
-- [Features](#features)
-- [Hardware Requirements](#hardware-requirements)
-- [Software Requirements](#software-requirements)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Building the Project](#building-the-project)
-- [Flashing and Monitoring](#flashing-and-monitoring)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
+### GSM/Cellular Features
+- ✅ GSM modem control and status checking
+- ✅ SIM card detection and management
+- ✅ Network registration and roaming
+- ✅ SMS sending and receiving
+- ✅ Voice calling functionality
+- ✅ Internet connectivity via GPRS/LTE
+- ✅ AT command interface
+- ✅ Signal strength monitoring
 
-## ✨ Features
+### GNSS Features
+- ✅ GPS, GLONASS, Galileo, BeiDou support
+- ✅ Real-time positioning
+- ✅ Continuous tracking with callbacks
+- ✅ Configurable update rates
+- ✅ NMEA parsing
+- ✅ Cold start capability
+- ✅ Fix quality assessment
 
-- **GSM/GPRS Communication**: Full AT command interface for SIM7600E
-- **GNSS/GPS Positioning**: Real-time location tracking with coordinate parsing
-- **TCP/IP Networking**: TCP socket communication over cellular network
-- **UART Communication**: Robust UART driver with queue-based message handling
-- **FreeRTOS Integration**: Multi-task architecture for concurrent operations
-- **Modular Design**: Clean separation of GSM, GNSS, and TCP components
-- **ESP-IDF v5.3+ Support**: Latest ESP-IDF framework compatibility
+### TCP/IP Features  
+- ✅ TCP client connectivity
+- ✅ HTTP client support
+- ✅ Data transmission and reception
+- ✅ Connection status callbacks
+- ✅ Keep-alive configuration
+- ✅ Multiple connection support
 
-## 🔧 Hardware Requirements
+### Component Features
+- ✅ Thread-safe design with FreeRTOS integration
+- ✅ Configurable via ESP-IDF menuconfig
+- ✅ Event-driven architecture with callbacks
+- ✅ Comprehensive error handling
+- ✅ Extensive logging support
+- ✅ Queue-based message handling
+- ✅ Memory efficient design
 
-### Essential Components
-- **ESP32-S3** microcontroller (recommended: ESP32-S3-DevKitC-1)
-- **SIM7600E** GSM/GNSS module
-- **Micro SIM card** with data plan
-- **GSM antenna** (LTE/4G compatible)
-- **GPS antenna** (passive or active)
-- **USB-C cable** for programming and power
+## Installation
 
-### Wiring Connections
-```
-ESP32-S3          SIM7600E
---------          --------
-GPIO17   -------> RX
-GPIO18   -------> TX
-GND      -------> GND
-5V       -------> VCC
-```
+### Option 1: Component Manager (Recommended)
+Add to your project's `idf_component.yml`:
 
-### Power Requirements
-- **SIM7600E**: 5V, 2A minimum (peak current during transmission)
-- **ESP32-S3**: 3.3V (USB powered during development)
-
-## 💻 Software Requirements
-
-### Required Software
-- **ESP-IDF v5.3.2 or higher**
-- **Git**
-- **Python 3.8+**
-- **CMake 3.16+**
-- **Windows PowerShell** (for Windows users)
-
-### Supported Platforms
-- Windows 10/11
-- Ubuntu 20.04+
-- macOS 10.15+
-
-## 📁 Project Structure
-
-```
-esp32-sim7600e/
-├── CMakeLists.txt              # Main CMake configuration
-├── build.bat                   # Windows build script
-├── sdkconfig                   # ESP-IDF configuration
-├── README.md                   # This file
-├── main/
-│   ├── CMakeLists.txt         # Main component CMake
-│   ├── main.c                 # Application entry point
-│   ├── driver/
-│   │   └── gsm/
-│   │       ├── gsm.c          # GSM AT command driver
-│   │       └── gsm.h          # GSM driver header
-│   └── system/
-│       ├── gsm_system.c       # GSM system management
-│       ├── gsm_system.h
-│       ├── gnss_system.c      # GNSS positioning system
-│       ├── gnss_system.h
-│       ├── tcp_system.c       # TCP networking system
-│       └── tcp_system.h
-└── build/                     # Build output directory
+```yaml
+dependencies:
+  esp32_sim7600e:
+    git: https://github.com/your-repo/esp32-sim7600e.git
 ```
 
-## 🚀 Installation
-
-### 1. Install ESP-IDF
-
-#### Option A: ESP-IDF Installer (Recommended for Windows)
-1. Download the [ESP-IDF Installer](https://dl.espressif.com/dl/esp-idf/)
-2. Run the installer and select ESP-IDF v5.3.2
-3. Follow the installation wizard
-
-#### Option B: Manual Installation
+### Option 2: Git Submodule
 ```bash
-# Clone ESP-IDF repository
-git clone --recursive https://github.com/espressif/esp-idf.git
-cd esp-idf
-git checkout v5.3.2
-git submodule update --init --recursive
-
-# Install tools
-./install.bat  # Windows
-# OR
-./install.sh   # Linux/macOS
+cd your_project
+git submodule add https://github.com/your-repo/esp32-sim7600e.git components/esp32_sim7600e
 ```
 
-### 2. Clone This Repository
-```bash
-git clone https://github.com/Armisuari/esp32-sim7600e.git
-cd esp32-sim7600e
-```
+### Option 3: Manual Download
+Download and extract to your project's `components/` directory.
 
-### 3. Set Up Environment
-```powershell
-# Windows PowerShell
-$env:IDF_PATH = "C:\esp\v5.3.2\esp-idf"  # Adjust path as needed
-. $env:IDF_PATH\export.ps1
+## Hardware Connections
 
-# OR use the automated build script
-.\build.bat
-```
+| ESP32 Pin | SIM7600E Pin | Function |
+|-----------|--------------|----------|
+| GPIO2     | TXD          | UART TX  |
+| GPIO1     | RXD          | UART RX  |
+| GPIO41    | PWRKEY       | Power Control |
+| 5V        | VCC_5V       | Power Supply |
+| GND       | GND          | Ground |
 
-```bash
-# Linux/macOS
-export IDF_PATH="~/esp/esp-idf"  # Adjust path as needed
-source $IDF_PATH/export.sh
-```
+**Note**: SIM7600E requires a stable 5V power supply. Ensure your power source can provide sufficient current (typically 2A peak).
 
-## ⚙️ Configuration
+## Quick Start
 
-### 1. Hardware Configuration
-Update the UART pins in `main/driver/gsm/gsm.h` if using different GPIO pins:
+### Basic Initialization
 
 ```c
-#define GSM_UART_TXD_PIN 17
-#define GSM_UART_RXD_PIN 18
-#define GSM_UART_PORT UART_NUM_2
+#include "sim7600e.h"
+#include "sim7600e_gsm.h"
+#include "sim7600e_gnss.h"
+#include "sim7600e_tcp.h"
+
+void app_main(void) {
+    // Get default configuration
+    sim7600e_config_t config = sim7600e_get_default_config();
+    
+    // Initialize the component
+    esp_err_t ret = sim7600e_init(&config);
+    if (ret != ESP_OK) {
+        ESP_LOGE("MAIN", "Initialization failed");
+        return;
+    }
+    
+    // Power on the module
+    sim7600e_power_on();
+    
+    // Wait for boot
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    
+    // Check modem status
+    if (sim7600e_gsm_check_modem() == ESP_OK) {
+        ESP_LOGI("MAIN", "SIM7600E is ready!");
+    }
+}
 ```
 
-### 2. Network Configuration
-Modify the APN settings in `main/main.c`:
+### GSM/Cellular Usage
 
 ```c
-gsm_enable_internet("your_apn_here");  // Replace with your carrier's APN
+// Check SIM card
+if (sim7600e_gsm_check_sim() == ESP_OK) {
+    ESP_LOGI("MAIN", "SIM card is ready");
+}
+
+// Wait for network registration
+esp_err_t ret = sim7600e_gsm_wait_for_network(60000);
+if (ret == ESP_OK) {
+    ESP_LOGI("MAIN", "Registered to network");
+}
+
+// Enable internet connection
+ret = sim7600e_gsm_enable_internet("your_apn");
+if (ret == ESP_OK) {
+    ESP_LOGI("MAIN", "Internet connection enabled");
+}
+
+// Send SMS
+ret = sim7600e_gsm_send_sms("+1234567890", "Hello from ESP32!");
 ```
 
-### 3. ESP-IDF Configuration
-Use menuconfig to customize settings:
+### GNSS Usage
+
+```c
+// GNSS event callback
+void gnss_callback(const sim7600e_gnss_info_t *info, void *user_data) {
+    if (info->valid_fix) {
+        printf("Location: %.6f, %.6f\n", info->latitude, info->longitude);
+    }
+}
+
+// Enable GNSS
+sim7600e_gnss_config_t gnss_config = sim7600e_gnss_get_default_config();
+sim7600e_gnss_enable(&gnss_config);
+
+// Register callback and start continuous tracking
+sim7600e_gnss_register_callback(gnss_callback, NULL);
+sim7600e_gnss_start_task(5, 4096);
+```
+
+### TCP Client Usage
+
+```c
+// TCP configuration
+sim7600e_tcp_config_t tcp_config = sim7600e_tcp_get_default_config();
+strcpy(tcp_config.host, "httpbin.org");
+tcp_config.port = 80;
+
+// Connect
+esp_err_t ret = sim7600e_tcp_connect(&tcp_config);
+if (ret == ESP_OK) {
+    // Send HTTP request
+    const char *request = "GET /get HTTP/1.1\\r\\nHost: httpbin.org\\r\\n\\r\\n";
+    sim7600e_tcp_send_string(request, 10000);
+}
+```
+
+## Configuration
+
+Configure the component via menuconfig:
+
 ```bash
 idf.py menuconfig
 ```
 
-Key configurations:
-- **Serial flasher config** → Flash size: 4MB (minimum)
-- **Component config** → ESP32-specific → CPU frequency: 240 MHz
-- **Component config** → FreeRTOS → Tick rate: 1000 Hz
+Navigate to `Component config` → `SIM7600E Configuration` to adjust:
+- UART pins and communication settings
+- Queue sizes for message handling
+- GNSS constellations and update rates  
+- TCP timeouts and keep-alive settings
+- Logging levels
 
-## 🔨 Building the Project
+## API Reference
 
-### Method 1: Automated Build (Windows)
-```powershell
-.\build.bat
-```
-This script automatically:
-- Detects ESP-IDF installation
-- Sets up the environment
-- Configures the build
-- Compiles the firmware
+### Core Functions
 
-### Method 2: Manual Build
-```bash
-# Set target (if not already set)
-idf.py set-target esp32s3
+| Function | Description |
+|----------|-------------|
+| `sim7600e_init()` | Initialize the component |
+| `sim7600e_deinit()` | Cleanup resources |
+| `sim7600e_power_on()` | Power on the module |
+| `sim7600e_power_off()` | Power off the module |
+| `sim7600e_get_module_info()` | Get IMEI and module info |
 
-# Build the project
-idf.py build
-```
+### GSM Functions
 
-### Build Output
-Successful build generates:
-- `build/esp32-sim7600e.bin` - Main application binary
-- `build/bootloader/bootloader.bin` - Bootloader binary
-- `build/partition_table/partition-table.bin` - Partition table
+| Function | Description |
+|----------|-------------|
+| `sim7600e_gsm_check_modem()` | Check modem status |
+| `sim7600e_gsm_check_sim()` | Verify SIM card |
+| `sim7600e_gsm_wait_for_network()` | Wait for network registration |
+| `sim7600e_gsm_enable_internet()` | Enable data connection |
+| `sim7600e_gsm_send_sms()` | Send SMS message |
+| `sim7600e_gsm_make_call()` | Initiate voice call |
+| `sim7600e_gsm_send_at_command()` | Send raw AT command |
 
-## 📡 Flashing and Monitoring
+### GNSS Functions
 
-### 1. Flash the Firmware
-```bash
-# Flash all binaries (bootloader, partition table, app)
-idf.py flash
+| Function | Description |
+|----------|-------------|
+| `sim7600e_gnss_enable()` | Enable GNSS functionality |
+| `sim7600e_gnss_get_info()` | Get current position |
+| `sim7600e_gnss_start_task()` | Start continuous tracking |
+| `sim7600e_gnss_register_callback()` | Register position callback |
+| `sim7600e_gnss_cold_start()` | Perform cold start |
 
-# OR specify port manually
-idf.py -p COM3 flash  # Windows
-idf.py -p /dev/ttyUSB0 flash  # Linux
-```
+### TCP Functions
 
-### 2. Monitor Serial Output
-```bash
-# Start serial monitor
-idf.py monitor
+| Function | Description |
+|----------|-------------|
+| `sim7600e_tcp_connect()` | Establish TCP connection |
+| `sim7600e_tcp_send()` | Send data |
+| `sim7600e_tcp_receive()` | Receive data |
+| `sim7600e_tcp_disconnect()` | Close connection |
+| `sim7600e_tcp_get_status()` | Get connection status |
 
-# OR specify port and baud rate
-idf.py -p COM3 monitor -b 115200
-```
+## Examples
 
-### 3. Flash and Monitor (Combined)
-```bash
-idf.py flash monitor
-```
+See the `examples/` directory for complete working examples:
 
-**Exit monitor**: Press `Ctrl+]`
+- [`basic_usage/`](examples/basic_usage/) - Complete functionality demonstration
+- More examples coming soon!
 
-## 🎯 Usage
-
-### Basic Operation Flow
-
-1. **Power On**: The ESP32-S3 initializes and starts the GSM module
-2. **GSM Initialization**: 
-   - Checks modem connectivity
-   - Retrieves IMEI
-   - Verifies SIM card
-   - Enables internet connection
-3. **GNSS Activation**: Enables GPS/GNSS for positioning
-4. **Continuous Operation**: 
-   - Collects GPS coordinates
-   - Maintains cellular connection
-   - Handles TCP communication (if enabled)
-
-### Serial Output Example
-```
-I (2043) MAIN: Initializing GSM module...
-I (2144) GSM: Modem check: OK
-I (2203) GSM: IMEI: 867584123456789
-I (2267) GSM: SIM card detected
-I (3456) GSM: Internet enabled with APN: internet
-I (4123) GSM: GNSS enabled
-I (5234) GNSS: Location: 40.7128,-74.0060 (Accuracy: 5.2m)
-```
-
-### Available Functions
-
-#### GSM Functions
-- `gsm_modem_check()` - Test AT command communication
-- `gsm_get_imei()` - Retrieve device IMEI
-- `gsm_sim_check()` - Verify SIM card presence
-- `gsm_enable_internet(apn)` - Enable internet with APN
-- `gsm_send_sms(number, message)` - Send SMS message
-
-#### GNSS Functions
-- `gsm_enable_gnss()` - Enable GNSS positioning
-- `gnss_task()` - Continuous GPS data collection
-- `parse_gnss_data()` - Parse GPS coordinates
-
-#### TCP Functions
-- `tcp_test_task_hello()` - Simple TCP echo test
-- `tcp_test_task_teltonika()` - Teltonika protocol test
-- `tcp_test_task_gnss_for_loop()` - Continuous GPS data transmission
-
-### Enabling TCP Features
-Uncomment the desired TCP functions in `main.c`:
-
-```c
-// Enable for simple TCP test
-tcp_test_task_hello();
-
-// Enable for Teltonika protocol
-tcp_test_task_teltonika();
-
-// Enable for continuous GPS transmission
-xTaskCreate(tcp_test_task_gnss_for_loop, "tcp_test_task", 8192, NULL, 8, NULL);
-```
-
-## 📚 API Reference
-
-### GSM Driver API (`main/driver/gsm/gsm.h`)
-
-```c
-// Core GSM functions
-esp_err_t gsm_uart_init(void);
-esp_err_t gsm_send_command(const char* command, int timeout_ms);
-esp_err_t gsm_wait_response(char* response, size_t max_len, int timeout_ms);
-
-// System functions
-bool gsm_modem_check(void);
-bool gsm_get_imei(void);
-bool gsm_sim_check(void);
-bool gsm_enable_internet(const char* apn);
-bool gsm_enable_gnss(void);
-```
-
-### GNSS System API (`main/system/gnss_system.h`)
-
-```c
-typedef struct {
-    float latitude;
-    float longitude;
-    float altitude;
-    float speed;
-    char timestamp[32];
-    float accuracy;
-} gps_info_t;
-
-void gnss_task(void* pvParameters);
-bool parse_gnss_data(const char* data, gps_info_t* gps_info);
-```
-
-### TCP System API (`main/system/tcp_system.h`)
-
-```c
-void tcp_test_task_hello(void);
-void tcp_test_task_teltonika(void);
-void tcp_test_task_gnss_for_loop(void* pvParameters);
-```
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
-#### 1. GSM Module Not Responding
-**Symptoms**: `GSM: Modem check failed` in logs
+**Module not responding:**
+- Check power supply (stable 5V, 2A capability)
+- Verify UART pin connections
+- Ensure proper grounding
+- Try power cycling the module
 
-**Solutions**:
-- Check UART wiring (TX/RX, power, ground)
-- Verify SIM7600E power supply (5V, 2A minimum)
-- Ensure proper antenna connection
-- Check UART pins in configuration
+**SIM card not detected:**
+- Verify SIM card is inserted correctly
+- Check if SIM card requires PIN (disable if possible)
+- Ensure SIM card has active service
 
-#### 2. SIM Card Not Detected
-**Symptoms**: `SIM card not found` in logs
+**Network registration fails:**
+- Check signal strength and antenna connection
+- Verify APN settings for your carrier
+- Ensure SIM card has active data plan
+- Try different network bands
 
-**Solutions**:
-- Ensure SIM card is properly inserted
-- Verify SIM card has active data plan
-- Check PIN code (disable if enabled)
-- Try different SIM card
-
-#### 3. No GPS Signal
-**Symptoms**: GPS coordinates show 0.0000,0.0000
-
-**Solutions**:
+**GNSS not getting fix:**
 - Ensure GPS antenna is connected
-- Move to outdoor location with clear sky view
-- Wait 2-5 minutes for GPS cold start
-- Check antenna quality and positioning
+- Move to location with clear sky view
+- Allow time for cold start (5-15 minutes)
+- Check antenna placement away from interference
 
-#### 4. Build Errors
-**Symptoms**: Compilation failures
+**TCP connection fails:**
+- Verify internet connectivity is established
+- Check DNS resolution and server availability
+- Ensure firewall/carrier doesn't block connections
+- Try different servers for testing
 
-**Solutions**:
-```bash
-# Clean and rebuild
-idf.py fullclean
-idf.py build
+### Debug Logging
 
-# Check ESP-IDF version
-idf.py --version
+Enable verbose logging:
 
-# Update components
-idf.py update-dependencies
-```
-
-#### 5. Flash Errors
-**Symptoms**: Failed to connect during flashing
-
-**Solutions**:
-- Press and hold BOOT button while connecting
-- Check USB cable and driver installation
-- Verify correct COM port selection
-- Try lower flash speed: `idf.py -b 115200 flash`
-
-### Debug Tips
-
-#### Enable Verbose Logging
-In `main.c`, increase log level:
 ```c
-esp_log_level_set("*", ESP_LOG_VERBOSE);
-esp_log_level_set("GSM", ESP_LOG_DEBUG);
+esp_log_level_set("SIM7600E*", ESP_LOG_VERBOSE);
 ```
 
-#### Monitor AT Commands
-Add debug prints in `gsm.c` to see raw AT communication:
-```c
-printf("TX: %s\n", command);
-printf("RX: %s\n", response);
-```
+Or configure in menuconfig under `SIM7600E Configuration` → `Logging`.
 
-#### Check Memory Usage
-```bash
-idf.py size
-idf.py size-components
-```
+## Version History
 
-## 🤝 Contributing
+- **v1.0.0** - Initial release with full GSM, GNSS, and TCP support
+- More versions coming...
 
-We welcome contributions! Please follow these steps:
+## Contributing
 
-### 1. Fork and Clone
-```bash
-git fork https://github.com/Armisuari/esp32-sim7600e.git
-git clone https://github.com/yourusername/esp32-sim7600e.git
-```
+1. Fork the repository
+2. Create feature branch
+3. Make changes with proper testing
+4. Submit pull request
 
-### 2. Create Feature Branch
-```bash
-git checkout -b feature/your-feature-name
-```
+Please ensure code follows ESP-IDF coding standards and includes appropriate documentation.
 
-### 3. Development Guidelines
-- Follow ESP-IDF coding standards
-- Add comments for complex functions
-- Update documentation for new features
-- Test on actual hardware before submitting
+## License
 
-### 4. Submit Pull Request
-- Ensure all builds pass
-- Include clear description of changes
-- Reference any related issues
+This component is released under MIT License. See LICENSE file for details.
 
-### Code Style
-- Use ESP-IDF naming conventions
-- Indent with 4 spaces
-- Maximum line length: 100 characters
-- Add Doxygen comments for public functions
+## Support
 
-## 📄 License
+- 📖 Documentation: See API reference above
+- 🐛 Issues: Create GitHub issues for bugs
+- 💬 Discussions: Use GitHub Discussions for questions
+- 📧 Contact: [your-email@example.com]
 
-This project is licensed under the MIT License. See LICENSE file for details.
+## Credits
 
-## 🆘 Support
-
-- **Issues**: [GitHub Issues](https://github.com/Armisuari/esp32-sim7600e/issues)
-- **Documentation**: [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/)
-- **SIM7600E Manual**: [Official AT Command Manual](https://www.simcom.com/product/SIM7600E.html)
-
-## 📝 Changelog
-
-### v1.0.0 (Current)
-- Initial release
-- Basic GSM/GPRS connectivity
-- GNSS positioning system
-- TCP communication framework
-- Windows build automation
+Based on the original ESP32-SIM7600E project by [@Armisuari](https://github.com/Armisuari).
+Refactored into a reusable ESP-IDF component with enhanced features and documentation.

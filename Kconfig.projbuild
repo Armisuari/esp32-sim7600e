@@ -1,0 +1,162 @@
+menu "SIM7600E Configuration"
+
+    config SIM7600E_UART_PORT_NUM
+        int "UART port number"
+        range 0 2
+        default 2
+        help
+            UART port number for SIM7600E communication.
+
+    config SIM7600E_TX_GPIO
+        int "UART TX GPIO number"
+        range 0 48
+        default 2
+        help
+            GPIO number for UART TX pin.
+
+    config SIM7600E_RX_GPIO
+        int "UART RX GPIO number"
+        range 0 48
+        default 1
+        help
+            GPIO number for UART RX pin.
+
+    config SIM7600E_PWRKEY_GPIO
+        int "Power Key GPIO number"
+        range 0 48
+        default 41
+        help
+            GPIO number for SIM7600E power key control.
+
+    config SIM7600E_UART_BAUD_RATE
+        int "UART baud rate"
+        default 115200
+        help
+            UART baud rate for SIM7600E communication.
+
+    config SIM7600E_UART_BUF_SIZE
+        int "UART buffer size"
+        range 512 4096
+        default 1024
+        help
+            UART RX/TX buffer size in bytes.
+
+    menu "Queue Configuration"
+        
+        config SIM7600E_URC_QUEUE_SIZE
+            int "URC queue size"
+            range 5 50
+            default 10
+            help
+                Size of the queue for Unsolicited Result Codes.
+
+        config SIM7600E_RESP_QUEUE_SIZE
+            int "Response queue size"
+            range 3 20
+            default 5
+            help
+                Size of the queue for AT command responses.
+
+        config SIM7600E_GNSS_QUEUE_SIZE
+            int "GNSS queue size"
+            range 1 10
+            default 1
+            help
+                Size of the queue for GNSS data.
+
+    endmenu
+
+    menu "GNSS Configuration"
+
+        config SIM7600E_GNSS_DEFAULT_UPDATE_RATE
+            int "Default GNSS update rate (ms)"
+            range 100 60000
+            default 1000
+            help
+                Default update rate for GNSS position updates in milliseconds.
+
+        config SIM7600E_GNSS_ENABLE_GPS
+            bool "Enable GPS constellation"
+            default y
+            help
+                Enable GPS constellation for positioning.
+
+        config SIM7600E_GNSS_ENABLE_GLONASS
+            bool "Enable GLONASS constellation"
+            default y
+            help
+                Enable GLONASS constellation for positioning.
+
+        config SIM7600E_GNSS_ENABLE_GALILEO
+            bool "Enable Galileo constellation"
+            default n
+            help
+                Enable Galileo constellation for positioning.
+
+        config SIM7600E_GNSS_ENABLE_BEIDOU
+            bool "Enable BeiDou constellation"
+            default n
+            help
+                Enable BeiDou constellation for positioning.
+
+    endmenu
+
+    menu "TCP Configuration"
+
+        config SIM7600E_TCP_DEFAULT_TIMEOUT
+            int "Default TCP timeout (ms)"
+            range 5000 120000
+            default 30000
+            help
+                Default timeout for TCP operations in milliseconds.
+
+        config SIM7600E_TCP_KEEPALIVE_ENABLE
+            bool "Enable TCP Keep-alive by default"
+            default n
+            help
+                Enable TCP keep-alive by default for new connections.
+
+        config SIM7600E_TCP_KEEPALIVE_IDLE
+            int "TCP Keep-alive idle time (seconds)"
+            range 60 86400
+            default 7200
+            depends on SIM7600E_TCP_KEEPALIVE_ENABLE
+            help
+                TCP keep-alive idle time in seconds.
+
+        config SIM7600E_TCP_KEEPALIVE_INTERVAL
+            int "TCP Keep-alive probe interval (seconds)"
+            range 1 3600
+            default 30
+            depends on SIM7600E_TCP_KEEPALIVE_ENABLE
+            help
+                TCP keep-alive probe interval in seconds.
+
+        config SIM7600E_TCP_KEEPALIVE_COUNT
+            int "TCP Keep-alive probe count"
+            range 1 20
+            default 9
+            depends on SIM7600E_TCP_KEEPALIVE_ENABLE
+            help
+                Number of TCP keep-alive probes.
+
+    endmenu
+
+    menu "Logging"
+
+        config SIM7600E_LOG_LEVEL
+            int "SIM7600E log level"
+            range 0 5
+            default 3
+            help
+                Log level for SIM7600E component:
+                0: No output
+                1: Error
+                2: Warning  
+                3: Info
+                4: Debug
+                5: Verbose
+
+    endmenu
+
+endmenu

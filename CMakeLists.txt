@@ -1,12 +1,18 @@
-# ESP32-S3 GSM SIM7600E Project
-# For more information about build system see
-# https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html
-# The following five lines of boilerplate have to be in your project's
-# CMakeLists in this exact order for cmake to work correctly
-cmake_minimum_required(VERSION 3.16)
-
-set(LWIP_INC "${IDF_PATH}/components/lwip/include")
-include_directories(${LWIP_INC})
-
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(esp32-sim7600e)
+idf_component_register(
+    SRCS 
+        "src/sim7600e.c"
+        "src/sim7600e_gsm.c"
+        "src/sim7600e_gnss.c"
+        "src/sim7600e_tcp.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        "driver"
+        "esp_timer"
+        "freertos"
+        "esp_common"
+        "log"
+    PRIV_REQUIRES 
+        "esp_driver_uart"
+        "esp_driver_gpio"
+)
