@@ -72,6 +72,34 @@ Download and extract to your project's `components/` directory.
 
 **Note**: SIM7600E requires a stable 5V power supply. Ensure your power source can provide sufficient current (typically 2A peak).
 
+## VS Code IntelliSense Setup
+
+To enable proper IntelliSense support in VS Code:
+
+### Quick Setup
+```bash
+# Windows
+setup_vscode.bat
+
+# Linux/macOS  
+./setup_vscode.sh
+```
+
+### Manual Setup
+1. Copy VS Code configuration:
+   ```bash
+   cp -r vscode_template/ .vscode/
+   ```
+
+2. Update paths in `.vscode/c_cpp_properties.json` if your ESP-IDF installation differs from the default
+
+3. Restart VS Code and run "C/C++: Reset IntelliSense Database" from Command Palette
+
+### Troubleshooting IntelliSense
+- Ensure ESP-IDF extension is installed and configured
+- Verify project builds successfully with `idf.py build`  
+- Check that ESP-IDF paths in configuration match your installation
+
 ## Quick Start
 
 ### Basic Initialization

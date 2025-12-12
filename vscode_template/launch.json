@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ESP32 Debug",
+            "type": "espidf",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/${workspaceFolderBasename}.elf",
+            "cwd": "${workspaceFolder}",
+            "environment": {
+                "ESP_IDF_PATH": "C:/Espressif/frameworks/esp-idf-v5.3"
+            },
+            "preLaunchTask": "ESP-IDF: Build project"
+        }
+    ]
+}

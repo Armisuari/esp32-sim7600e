@@ -1,0 +1,24 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.generator": "Ninja",
+    "idf.espIdfPath": "C:/Espressif/frameworks/esp-idf-v5.3",
+    "idf.toolsPath": "C:/Espressif",
+    "idf.pythonBinPath": "C:/Espressif/python_env/idf5.3_py3.13_env/Scripts/python.exe",
+    "idf.customExtraPaths": "C:/Espressif/tools/xtensa-esp-elf/esp-13.2.0_20250707/xtensa-esp-elf/bin;C:/Espressif/tools/cmake/3.30.2/bin;C:/Espressif/tools/ninja/1.12.1",
+    "idf.customExtraVars": {
+        "OPENOCD_SCRIPTS": "C:/Espressif/tools/openocd-esp32/v0.12.0-esp32-20250707/openocd-esp32/share/openocd/scripts",
+        "ESP_ROM_ELF_DIR": "C:/Espressif/tools/esp-rom-elfs/20240305"
+    },
+    "idf.port": "COM3",
+    "idf.baudRate": "460800",
+    "idf.flashType": "UART",
+    "files.associations": {
+        "*.h": "c",
+        "*.c": "c"
+    },
+    "C_Cpp.default.compilerPath": "C:/Espressif/tools/xtensa-esp-elf/esp-13.2.0_20250707/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc.exe",
+    "C_Cpp.default.cStandard": "c11",
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.default.intelliSenseMode": "gcc-x86"
+}
