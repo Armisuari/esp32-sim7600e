@@ -145,6 +145,17 @@ esp_err_t sim7600e_get_module_info(char *imei, size_t imei_len);
  */
 esp_err_t sim7600e_get_queues(QueueHandle_t *urc_queue, QueueHandle_t *resp_queue, QueueHandle_t *gnss_queue);
 
+/**
+ * @brief Get individual queue handles and other context
+ * @note These functions are for internal/advanced usage
+ */
+QueueHandle_t sim7600e_get_urc_queue(void);
+QueueHandle_t sim7600e_get_resp_queue(void);
+QueueHandle_t sim7600e_get_gnss_queue(void);
+SemaphoreHandle_t sim7600e_get_gnss_semaphore(void);
+SemaphoreHandle_t sim7600e_get_mutex(void);
+int sim7600e_get_uart_port(void);
+
 #ifdef __cplusplus
 }
 #endif

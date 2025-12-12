@@ -84,8 +84,9 @@ void app_main(void)
         return;
     }
     
-    // Wait a moment for the module to boot
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    // Wait a moment for the module to boot and SIM to be detected
+    ESP_LOGI(TAG, "Waiting for module initialization...");
+    vTaskDelay(pdMS_TO_TICKS(10000));  // Increased from 5 to 10 seconds
     
     // Check modem status
     ESP_LOGI(TAG, "Checking modem status...");
@@ -95,17 +96,32 @@ void app_main(void)
         return;
     }
     
-    // Turn off echo mode
-    ret = sim7600e_gsm_turn_off_echo();
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to turn off echo mode");
+    // Check SIM card with retry mechanism
+    ESP_LOGI(TAG, "Checking SIM card...");
+    int sim_retry = 0;
+    const int max_sim_retries = 3;
+    
+    while (sim_retry < max_sim_retries) {
+        ret = sim7600e_gsm_check_sim();
+        if (ret == ESP_OK) {
+            break;
+        }
+        
+        sim_retry++;
+        if (sim_retry < max_sim_retries) {
+            ESP_LOGW(TAG, "SIM check failed (attempt %d/%d), retrying in 3 seconds...", 
+                     sim_retry, max_sim_retries);
+            vTaskDelay(pdMS_TO_TICKS(3000));
+        }
     }
     
-    // Check SIM card
-    ESP_LOGI(TAG, "Checking SIM card...");
-    ret = sim7600e_gsm_check_sim();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SIM card check failed");
+        ESP_LOGE(TAG, "SIM card check failed after %d attempts", max_sim_retries);
+        ESP_LOGE(TAG, "Please check:");
+        ESP_LOGE(TAG, "1. SIM card is properly inserted");
+        ESP_LOGE(TAG, "2. SIM card orientation is correct");
+        ESP_LOGE(TAG, "3. SIM card contacts are clean");
+        ESP_LOGE(TAG, "4. SIM card is not damaged");
         return;
     }
     
@@ -120,7 +136,30 @@ void app_main(void)
     ESP_LOGI(TAG, "Waiting for network registration...");
     ret = sim7600e_gsm_wait_for_network(60000); // 60 second timeout
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Network registration failed");
+        ESP_LOGE(TAG, "Network registration failed - trying troubleshooting...");
+        
+        // Try to get more information about the failure
+        char debug_response[256];
+        ESP_LOGI(TAG, "=== Network Troubleshooting ===");
+        
+        if (sim7600e_gsm_send_at_command("AT+CPSI?\r\n", debug_response, sizeof(debug_response), 5000) == ESP_OK) {
+            ESP_LOGI(TAG, "System info: %s", debug_response);
+        }
+        
+        if (sim7600e_gsm_send_at_command("AT+CSQ\r\n", debug_response, sizeof(debug_response), 5000) == ESP_OK) {
+            ESP_LOGI(TAG, "Signal quality: %s", debug_response);
+        }
+        
+        if (sim7600e_gsm_send_at_command("AT+COPS=?\r\n", debug_response, sizeof(debug_response), 30000) == ESP_OK) {
+            ESP_LOGI(TAG, "Available networks: %s", debug_response);
+        }
+        
+        ESP_LOGE(TAG, "Network registration failed - check SIM card, signal, and carrier coverage");
+        ESP_LOGE(TAG, "Make sure:");
+        ESP_LOGE(TAG, "1. SIM card is activated and has data plan");
+        ESP_LOGE(TAG, "2. Antenna is properly connected");
+        ESP_LOGE(TAG, "3. You have cellular signal in your area");
+        ESP_LOGE(TAG, "4. SIM is from a compatible carrier");
         return;
     }
     
@@ -183,7 +222,7 @@ void app_main(void)
         sim7600e_gnss_register_callback(gnss_event_handler, NULL);
         
         // Start GNSS task
-        ret = sim7600e_gnss_start_task(5, 4096);
+        ret = sim7600e_gnss_start_task(5, 8192);  // Increased stack size to prevent overflow
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "Failed to start GNSS task");
         }
