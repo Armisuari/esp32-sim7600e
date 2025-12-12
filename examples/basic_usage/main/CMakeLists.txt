@@ -4,5 +4,7 @@ idf_component_register(
     INCLUDE_DIRS 
         "."
     REQUIRES
-        "esp32_sim7600e"
+        "esp32-sim7600e"
+        "esp_event"
+        "esp_netif"
 )
