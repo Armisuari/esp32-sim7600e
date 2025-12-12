@@ -1,0 +1,173 @@
+# ESP-IDF Build System
+build/
+sdkconfig.old
+dependencies.lock
+
+# Compilation artifacts
+*.o
+*.a
+*.so
+*.bin
+*.elf
+*.map
+
+# ESP-IDF specific
+.flash_args
+bootloader-flash_args
+partition-table-flash_args
+flash_project_args
+app-flash_args
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# VS Code
+.vscode/settings.json
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# Keep .vscode/extensions.json for recommended extensions
+!.vscode/extensions.json
+
+# Clangd
+.clangd/
+.cache/
+compile_commands.json
+
+# Log files
+*.log
+log.*
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# IDEs and editors
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.cproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+_deps
+
+# Ninja
+.ninja_deps
+.ninja_log
+
+# ESP-IDF component manager
+managed_components/
+dependencies.lock
+
+# Certificates and keys (security)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Configuration backups
+sdkconfig.old.*
+sdkconfig.defaults.old
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Documentation builds
+docs/_build/
+docs/build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environment variables
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
