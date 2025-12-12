@@ -326,7 +326,7 @@ This component is released under MIT License. See LICENSE file for details.
 - 📖 Documentation: See API reference above
 - 🐛 Issues: Create GitHub issues for bugs
 - 💬 Discussions: Use GitHub Discussions for questions
-- 📧 Contact: [your-email@example.com]
+- 📧 Contact: [ariefnurmisuari@gmail.com]
 
 ## Credits
 
