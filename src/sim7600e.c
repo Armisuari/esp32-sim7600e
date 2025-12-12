@@ -1,3 +1,16 @@
+/**
+ * @file sim7600e.c
+ * @brief SIM7600E 4G LTE Module Driver Implementation
+ * 
+ * Core functionality for the SIM7600E cellular module including:
+ * - Module initialization and configuration
+ * - UART communication setup
+ * - Task and queue management
+ * - Power control
+ * 
+ * @author ESP32 SIM7600E Component
+ */
+
 #include "sim7600e.h"
 #include "sim7600e_gsm.h"
 #include "sim7600e_gnss.h"

@@ -1,3 +1,16 @@
+/**
+ * @file sim7600e_tcp.c
+ * @brief TCP Communication Functions for SIM7600E
+ * 
+ * This file implements TCP/IP connectivity features including:
+ * - TCP client connections
+ * - Data transmission and reception
+ * - Connection status management
+ * - Callback handling for network events
+ * 
+ * @author ESP32 SIM7600E Component
+ */
+
 #include "sim7600e_tcp.h"
 #include "sim7600e.h"
 #include "sim7600e_gsm.h"

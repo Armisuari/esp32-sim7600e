@@ -55,7 +55,6 @@ venv.bak/
 
 # ESP-IDF specific
 managed_components/
-dependencies.lock
 
 # Build artifacts
 *.bin

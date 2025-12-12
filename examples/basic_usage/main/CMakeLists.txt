@@ -1,7 +1,9 @@
+# Main component for SIM7600E basic usage example
+
 idf_component_register(
-    SRCS 
+    SRCS
         "main.c"
-    INCLUDE_DIRS 
+    INCLUDE_DIRS
         "."
     REQUIRES
         "esp32-sim7600e"

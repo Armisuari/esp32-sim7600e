@@ -1,3 +1,16 @@
+/**
+ * @file sim7600e_gsm.c
+ * @brief GSM/4G Communication Functions for SIM7600E
+ * 
+ * This file implements GSM/4G cellular connectivity features including:
+ * - Network registration and status monitoring
+ * - SMS sending and receiving
+ * - Internet connection management
+ * - AT command interface
+ * 
+ * @author ESP32 SIM7600E Component
+ */
+
 #include "sim7600e_gsm.h"
 #include "sim7600e.h"
 #include "driver/uart.h"

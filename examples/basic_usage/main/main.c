@@ -18,8 +18,8 @@ static const char *TAG = "SIM7600E_EXAMPLE";
 static void gnss_event_handler(const sim7600e_gnss_info_t *info, void *user_data)
 {
     if (info->valid_fix) {
-        ESP_LOGI(TAG, "GNSS Fix: Lat=%.6f, Lon=%.6f, Alt=%.2f m, Speed=%.2f m/s, Sats=%d", 
-                 info->latitude, info->longitude, info->altitude, 
+        ESP_LOGI(TAG, "GNSS Fix: Lat=%.6f, Lon=%.6f, Alt=%.2f m, Speed=%.2f m/s, Sats=%d",
+                 info->latitude, info->longitude, info->altitude,
                  info->speed, info->satellites_used);
         ESP_LOGI(TAG, "Timestamp: %s", info->timestamp);
     } else {
@@ -62,10 +62,11 @@ void app_main(void)
     // Initialize the SIM7600E component
     sim7600e_config_t config = sim7600e_get_default_config();
     
-    // You can customize the configuration here
-    // config.tx_pin = 2;
-    // config.rx_pin = 1;
-    // config.pwrkey_pin = 41;
+    // You can customize the configuration here if needed
+    // Example pin assignments for different ESP32 boards:
+    // config.tx_pin = 17;      // GPIO17 for UART TX
+    // config.rx_pin = 16;      // GPIO16 for UART RX  
+    // config.pwrkey_pin = 4;   // GPIO4 for power key control
     // config.baud_rate = 115200;
     
     esp_err_t ret = sim7600e_init(&config);
@@ -134,7 +135,8 @@ void app_main(void)
     
     // Enable internet connection
     ESP_LOGI(TAG, "Enabling internet connection...");
-    ret = sim7600e_gsm_enable_internet("internet"); // Replace with your APN
+    // Replace "internet" with your carrier's APN (e.g., "internet", "data", "fast.t-mobile.com")
+    ret = sim7600e_gsm_enable_internet("internet");
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to enable internet connection");
     } else {
@@ -187,7 +189,7 @@ void app_main(void)
         }
     }
     
-    // Main loop - demonstrate periodic operations
+    // Main application loop - demonstrate periodic operations
     ESP_LOGI(TAG, "Starting main loop...");
     
     int loop_count = 0;
@@ -197,7 +199,7 @@ void app_main(void)
         
         ESP_LOGI(TAG, "Main loop iteration: %d", loop_count);
         
-        // Get current network info every 5 iterations (50 seconds)
+        // Check network signal strength every 5 iterations (50 seconds)
         if (loop_count % 5 == 0) {
             ret = sim7600e_gsm_get_network_info(&net_info);
             if (ret == ESP_OK) {
@@ -215,7 +217,8 @@ void app_main(void)
             }
         }
         
-        // Send SMS every 20 iterations (200 seconds) - uncomment to test
+        // Send SMS demonstration every 20 iterations (200 seconds)
+        // Uncomment and modify the phone number to test SMS functionality
         /*
         if (loop_count % 20 == 0) {
             ret = sim7600e_gsm_send_sms("+1234567890", "Hello from ESP32!");

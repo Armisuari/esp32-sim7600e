@@ -1,3 +1,14 @@
+/**
+ * @file sim7600e.h
+ * @brief SIM7600E 4G LTE Module Driver for ESP32
+ * 
+ * This component provides a high-level interface for the SIM7600E cellular module,
+ * including GSM/4G connectivity, GNSS positioning, and TCP communication.
+ * 
+ * @author ESP32 SIM7600E Component
+ * @version 1.0.0
+ */
+
 #ifndef SIM7600E_H
 #define SIM7600E_H
 

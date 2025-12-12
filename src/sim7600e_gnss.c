@@ -1,3 +1,16 @@
+/**
+ * @file sim7600e_gnss.c
+ * @brief GNSS/GPS Functions for SIM7600E
+ * 
+ * This file implements GNSS positioning functionality including:
+ * - GPS/GLONASS satellite positioning
+ * - NMEA data parsing
+ * - Position data callbacks
+ * - Multi-constellation support
+ * 
+ * @author ESP32 SIM7600E Component
+ */
+
 #include "sim7600e_gnss.h"
 #include "sim7600e.h"
 #include "sim7600e_gsm.h"
