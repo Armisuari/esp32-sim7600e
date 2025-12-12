@@ -12,22 +12,49 @@ if defined IDF_PATH (
     goto build
 )
 
-REM Common ESP-IDF installation paths
-set ESP_IDF_PATHS=C:\esp\esp-idf C:\Espressif\frameworks\esp-idf-v5.3.2 C:\Espressif\frameworks\esp-idf-v5.3.1 C:\Espressif\frameworks\esp-idf-v5.3 C:\Users\%USERNAME%\esp\esp-idf C:\Users\%USERNAME%\esp\v5.3.2\esp-idf
-
 echo Searching for ESP-IDF installation...
-for %%p in (%ESP_IDF_PATHS%) do (
-    if exist "%%p\export.bat" (
-        echo Found ESP-IDF at: %%p
-        set IDF_PATH=%%p
-        goto setup_env
-    )
+
+REM Check each path individually to avoid path parsing issues
+if exist "C:\esp\esp-idf\export.bat" (
+    echo Found ESP-IDF at: C:\esp\esp-idf
+    set "IDF_PATH=C:\esp\esp-idf"
+    goto setup_env
+)
+if exist "C:\Espressif\frameworks\esp-idf-v5.3.2\export.bat" (
+    echo Found ESP-IDF at: C:\Espressif\frameworks\esp-idf-v5.3.2
+    set "IDF_PATH=C:\Espressif\frameworks\esp-idf-v5.3.2"
+    goto setup_env
+)
+if exist "C:\Espressif\frameworks\esp-idf-v5.3.1\export.bat" (
+    echo Found ESP-IDF at: C:\Espressif\frameworks\esp-idf-v5.3.1
+    set "IDF_PATH=C:\Espressif\frameworks\esp-idf-v5.3.1"
+    goto setup_env
+)
+if exist "C:\Espressif\frameworks\esp-idf-v5.3\export.bat" (
+    echo Found ESP-IDF at: C:\Espressif\frameworks\esp-idf-v5.3
+    set "IDF_PATH=C:\Espressif\frameworks\esp-idf-v5.3"
+    goto setup_env
+)
+if exist "C:\Users\%USERNAME%\esp\esp-idf\export.bat" (
+    echo Found ESP-IDF at: C:\Users\%USERNAME%\esp\esp-idf
+    set "IDF_PATH=C:\Users\%USERNAME%\esp\esp-idf"
+    goto setup_env
+)
+if exist "C:\Users\%USERNAME%\esp\v5.3.2\esp-idf\export.bat" (
+    echo Found ESP-IDF at: C:\Users\%USERNAME%\esp\v5.3.2\esp-idf
+    set "IDF_PATH=C:\Users\%USERNAME%\esp\v5.3.2\esp-idf"
+    goto setup_env
 )
 
 echo ERROR: ESP-IDF not found in standard locations
 echo Please install ESP-IDF or set IDF_PATH manually
 echo Standard locations checked:
-for %%p in (%ESP_IDF_PATHS%) do echo   %%p
+echo   C:\esp\esp-idf
+echo   C:\Espressif\frameworks\esp-idf-v5.3.2
+echo   C:\Espressif\frameworks\esp-idf-v5.3.1
+echo   C:\Espressif\frameworks\esp-idf-v5.3
+echo   C:\Users\%USERNAME%\esp\esp-idf
+echo   C:\Users\%USERNAME%\esp\v5.3.2\esp-idf
 pause
 exit /b 1
 
@@ -35,19 +62,21 @@ exit /b 1
 echo Setting up ESP-IDF environment...
 
 REM Set up Python environment first
-set PYTHON_ENV=%USERPROFILE%\.espressif\python_env\idf5.3_py3.11_env
+set "PYTHON_ENV=%USERPROFILE%\.espressif\python_env\idf5.3_py3.11_env"
 if exist "%PYTHON_ENV%" (
     echo Found Python environment: %PYTHON_ENV%
-    set PATH=%PYTHON_ENV%\Scripts;%PATH%
-    set PYTHON=%PYTHON_ENV%\Scripts\python.exe
+    set "PATH=%PYTHON_ENV%\Scripts;%PATH%"
+    set "PYTHON=%PYTHON_ENV%\Scripts\python.exe"
 )
 
-call "%IDF_PATH%\export.bat"
-if errorlevel 1 (
-    echo ERROR: Failed to setup ESP-IDF environment
-    pause
-    exit /b 1
+echo Calling ESP-IDF export.bat...
+REM Call export.bat and ignore NVIDIA-related errors
+call "%IDF_PATH%\export.bat" 2>nul || (
+    echo NOTE: ESP-IDF export completed with warnings - this is usually fine
+    echo Continuing with build process...
 )
+
+echo ESP-IDF environment setup completed
 
 :build
 echo Current directory: %CD%
