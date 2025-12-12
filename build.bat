@@ -3,7 +3,7 @@ REM ESP32-S3 GSM SIM7600E Build Script for Windows
 REM Automated build script with ESP-IDF environment setup for GSM/GNSS project
 
 echo ================================================
-echo ESP32-S3 GSM SIM7600E Firmware Build Script
+echo ESP32 SIM7600E Firmware Build Script
 echo ================================================
 
 REM Check if ESP-IDF is already in environment
@@ -90,7 +90,7 @@ echo Configuring project...
 idf.py reconfigure
 
 REM Build the project
-echo Building GSM SIM7600E firmware...
+echo Building ESP32 SIM7600E firmware...
 echo Target: ESP32-S3
 echo Components: GSM/GNSS Communication, TCP/IP Stack
 idf.py build
@@ -102,7 +102,7 @@ if errorlevel 1 (
 )
 
 echo ================================================
-echo GSM SIM7600E Firmware Build Completed Successfully!
+echo ESP32 SIM7600E Firmware Build Completed Successfully!
 echo ================================================
 echo.
 echo Project Location: %CD%
