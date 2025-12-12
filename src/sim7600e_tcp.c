@@ -73,17 +73,78 @@ esp_err_t sim7600e_tcp_connect(const sim7600e_tcp_config_t *config)
     set_tcp_status(SIM7600E_TCP_CONNECTING);
     
     char command[256];
-    char response[256];
+    char response[512];
     
-    // Open TCP connection
+    // Check network interface status first
+    esp_err_t ret = sim7600e_gsm_send_at_command("AT+NETOPEN?\r\n", response, sizeof(response), 5000);
+    if (ret == ESP_OK) {
+        if (strstr(response, "+NETOPEN: 0")) {
+            ESP_LOGW(TAG, "Network interface not open, attempting to open");
+            ret = sim7600e_gsm_send_at_command("AT+NETOPEN\r\n", response, sizeof(response), 10000);
+            if (ret != ESP_OK || (!strstr(response, "+NETOPEN: 1") && !strstr(response, "already opened"))) {
+                ESP_LOGE(TAG, "Failed to open network interface: %s", response);
+                set_tcp_status(SIM7600E_TCP_ERROR);
+                return ESP_FAIL;
+            }
+        }
+    }
+    
+    // Try new NETOPEN API first
     snprintf(command, sizeof(command), "AT+CIPOPEN=0,\"TCP\",\"%s\",%d\r\n", 
              config->host, config->port);
     
-    esp_err_t ret = sim7600e_gsm_send_at_command(command, response, sizeof(response), config->timeout_ms);
+    ret = sim7600e_gsm_send_at_command(command, response, sizeof(response), config->timeout_ms);
     
-    if (ret == ESP_OK && (strstr(response, "CONNECT OK") || strstr(response, "+CIPOPEN: 0,0"))) {
+    // Check for success with new API responses
+    if (ret == ESP_OK) {
+        if (strstr(response, "+CIPOPEN: 0,0") || strstr(response, "CONNECT OK")) {
+            set_tcp_status(SIM7600E_TCP_CONNECTED);
+            ESP_LOGI(TAG, "TCP connection established");
+            return ESP_OK;
+        } 
+        // Check if we got a specific error code
+        else if (strstr(response, "+CIPOPEN: 0,")) {
+            char *error_start = strstr(response, "+CIPOPEN: 0,");
+            if (error_start) {
+                int error_code = 0;
+                char temp_ip[32] = {0};
+                int temp_port = 0;
+                // Try to parse: +CIPOPEN: 0,"TCP","IP",port,error_code
+                if (sscanf(error_start, "+CIPOPEN: 0,\"TCP\",\"%31[^\"]\",%d,%d", temp_ip, &temp_port, &error_code) >= 3 && error_code < 0) {
+                    ESP_LOGW(TAG, "CIPOPEN failed with error code %d for %s:%d", error_code, temp_ip, temp_port);
+                } else {
+                    ESP_LOGW(TAG, "CIPOPEN response unclear: %s", response);
+                }
+            }
+        }
+        else if (strstr(response, "OK") && !strstr(response, "+CIPOPEN:")) {
+            // For new API, just "OK" might mean success - check connection status
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Wait for connection to establish
+            
+            ret = sim7600e_gsm_send_at_command("AT+CIPOPEN?\r\n", response, sizeof(response), 5000);
+            if (ret == ESP_OK && strstr(response, "+CIPOPEN: 0,0")) {
+                set_tcp_status(SIM7600E_TCP_CONNECTED);
+                ESP_LOGI(TAG, "TCP connection established (verified)");
+                return ESP_OK;
+            }
+        }
+    }
+    
+    // If new API failed, try legacy CIPSTART
+    ESP_LOGW(TAG, "CIPOPEN failed, trying CIPSTART: %s", response);
+    
+    // First ensure we're in non-transparent mode for legacy API
+    ret = sim7600e_gsm_send_at_command("AT+CIPMODE=0\r\n", response, sizeof(response), 5000);
+    vTaskDelay(pdMS_TO_TICKS(500)); // Small delay after mode change
+    
+    snprintf(command, sizeof(command), "AT+CIPSTART=0,\"TCP\",\"%s\",%d\r\n", 
+             config->host, config->port);
+    
+    ret = sim7600e_gsm_send_at_command(command, response, sizeof(response), config->timeout_ms);
+    
+    if (ret == ESP_OK && (strstr(response, "CONNECT OK") || strstr(response, "ALREADY CONNECT"))) {
         set_tcp_status(SIM7600E_TCP_CONNECTED);
-        ESP_LOGI(TAG, "TCP connection established");
+        ESP_LOGI(TAG, "TCP connection established (legacy)");
         return ESP_OK;
     } else {
         set_tcp_status(SIM7600E_TCP_ERROR);

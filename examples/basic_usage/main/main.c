@@ -14,114 +14,44 @@
 
 static const char *TAG = "SIM7600E_EXAMPLE";
 
-// GNSS callback function
+// GNSS callback
 static void gnss_event_handler(const sim7600e_gnss_info_t *info, void *user_data)
 {
     if (info->valid_fix) {
-        ESP_LOGI(TAG, "GNSS Fix: Lat=%.6f, Lon=%.6f, Alt=%.2f m, Speed=%.2f m/s, Sats=%d",
-                 info->latitude, info->longitude, info->altitude,
-                 info->speed, info->satellites_used);
-        ESP_LOGI(TAG, "Timestamp: %s", info->timestamp);
-    } else {
-        ESP_LOGD(TAG, "No valid GNSS fix");
+        ESP_LOGI(TAG, "GNSS: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d",
+                 info->latitude, info->longitude, info->altitude, info->satellites_used);
     }
-}
-
-// TCP status callback function
-static void tcp_status_handler(sim7600e_tcp_status_t status, void *user_data)
-{
-    switch (status) {
-        case SIM7600E_TCP_CONNECTED:
-            ESP_LOGI(TAG, "TCP Connected");
-            break;
-        case SIM7600E_TCP_DISCONNECTED:
-            ESP_LOGI(TAG, "TCP Disconnected");
-            break;
-        case SIM7600E_TCP_CONNECTING:
-            ESP_LOGI(TAG, "TCP Connecting...");
-            break;
-        case SIM7600E_TCP_DISCONNECTING:
-            ESP_LOGI(TAG, "TCP Disconnecting...");
-            break;
-        case SIM7600E_TCP_ERROR:
-            ESP_LOGE(TAG, "TCP Error");
-            break;
-    }
-}
-
-// TCP receive callback function
-static void tcp_recv_handler(const uint8_t *data, size_t len, void *user_data)
-{
-    ESP_LOGI(TAG, "TCP Received %d bytes: %.*s", len, len, data);
 }
 
 void app_main(void) 
 {
     ESP_LOGI(TAG, "Starting SIM7600E Basic Example");
     
-    // Initialize the SIM7600E component
+    // Initialize SIM7600E with default config
     sim7600e_config_t config = sim7600e_get_default_config();
-    
-    // You can customize the configuration here if needed
-    // Example pin assignments for different ESP32 boards:
-    // config.tx_pin = 17;      // GPIO17 for UART TX
-    // config.rx_pin = 16;      // GPIO16 for UART RX  
-    // config.pwrkey_pin = 4;   // GPIO4 for power key control
-    // config.baud_rate = 115200;
-    
     esp_err_t ret = sim7600e_init(&config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SIM7600E: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to initialize SIM7600E");
         return;
     }
     
-    ESP_LOGI(TAG, "SIM7600E initialized successfully");
-    
-    // Power on the module
-    ret = sim7600e_power_on();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to power on SIM7600E");
-        return;
-    }
-    
-    // Wait a moment for the module to boot and SIM to be detected
+    // Power on and wait for initialization
+    sim7600e_power_on();
     ESP_LOGI(TAG, "Waiting for module initialization...");
-    vTaskDelay(pdMS_TO_TICKS(10000));  // Increased from 5 to 10 seconds
+    vTaskDelay(pdMS_TO_TICKS(10000));
     
     // Check modem status
-    ESP_LOGI(TAG, "Checking modem status...");
     ret = sim7600e_gsm_check_modem();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Modem check failed");
         return;
     }
     
-    // Check SIM card with retry mechanism
+    // Check SIM card
     ESP_LOGI(TAG, "Checking SIM card...");
-    int sim_retry = 0;
-    const int max_sim_retries = 3;
-    
-    while (sim_retry < max_sim_retries) {
-        ret = sim7600e_gsm_check_sim();
-        if (ret == ESP_OK) {
-            break;
-        }
-        
-        sim_retry++;
-        if (sim_retry < max_sim_retries) {
-            ESP_LOGW(TAG, "SIM check failed (attempt %d/%d), retrying in 3 seconds...", 
-                     sim_retry, max_sim_retries);
-            vTaskDelay(pdMS_TO_TICKS(3000));
-        }
-    }
-    
+    ret = sim7600e_gsm_check_sim();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SIM card check failed after %d attempts", max_sim_retries);
-        ESP_LOGE(TAG, "Please check:");
-        ESP_LOGE(TAG, "1. SIM card is properly inserted");
-        ESP_LOGE(TAG, "2. SIM card orientation is correct");
-        ESP_LOGE(TAG, "3. SIM card contacts are clean");
-        ESP_LOGE(TAG, "4. SIM card is not damaged");
+        ESP_LOGE(TAG, "SIM card check failed");
         return;
     }
     
@@ -134,32 +64,9 @@ void app_main(void)
     
     // Wait for network registration
     ESP_LOGI(TAG, "Waiting for network registration...");
-    ret = sim7600e_gsm_wait_for_network(60000); // 60 second timeout
+    ret = sim7600e_gsm_wait_for_network(60000);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Network registration failed - trying troubleshooting...");
-        
-        // Try to get more information about the failure
-        char debug_response[256];
-        ESP_LOGI(TAG, "=== Network Troubleshooting ===");
-        
-        if (sim7600e_gsm_send_at_command("AT+CPSI?\r\n", debug_response, sizeof(debug_response), 5000) == ESP_OK) {
-            ESP_LOGI(TAG, "System info: %s", debug_response);
-        }
-        
-        if (sim7600e_gsm_send_at_command("AT+CSQ\r\n", debug_response, sizeof(debug_response), 5000) == ESP_OK) {
-            ESP_LOGI(TAG, "Signal quality: %s", debug_response);
-        }
-        
-        if (sim7600e_gsm_send_at_command("AT+COPS=?\r\n", debug_response, sizeof(debug_response), 30000) == ESP_OK) {
-            ESP_LOGI(TAG, "Available networks: %s", debug_response);
-        }
-        
-        ESP_LOGE(TAG, "Network registration failed - check SIM card, signal, and carrier coverage");
-        ESP_LOGE(TAG, "Make sure:");
-        ESP_LOGE(TAG, "1. SIM card is activated and has data plan");
-        ESP_LOGE(TAG, "2. Antenna is properly connected");
-        ESP_LOGE(TAG, "3. You have cellular signal in your area");
-        ESP_LOGE(TAG, "4. SIM is from a compatible carrier");
+        ESP_LOGE(TAG, "Network registration failed");
         return;
     }
     
@@ -174,97 +81,66 @@ void app_main(void)
     
     // Enable internet connection
     ESP_LOGI(TAG, "Enabling internet connection...");
-    // Replace "internet" with your carrier's APN (e.g., "internet", "data", "fast.t-mobile.com")
     ret = sim7600e_gsm_enable_internet("internet");
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to enable internet connection");
-    } else {
+    if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Internet connection established");
         
-        // Demonstrate TCP connectivity
-        sim7600e_tcp_config_t tcp_config = sim7600e_tcp_get_default_config();
-        strcpy(tcp_config.host, "httpbin.org");
-        tcp_config.port = 80;
+        // Wait a bit for network to stabilize
+        vTaskDelay(pdMS_TO_TICKS(2000));
         
-        // Register TCP callbacks
-        sim7600e_tcp_register_status_callback(tcp_status_handler, NULL);
-        sim7600e_tcp_register_recv_callback(tcp_recv_handler, NULL);
-        
-        // Connect to TCP server
+        // TCP connection demo
         ESP_LOGI(TAG, "Connecting to TCP server...");
+        sim7600e_tcp_config_t tcp_config = sim7600e_tcp_get_default_config();
+        
+        // First try Google DNS server (should be widely accessible)
+        strcpy(tcp_config.host, "8.8.8.8");
+        tcp_config.port = 53;
+        
         ret = sim7600e_tcp_connect(&tcp_config);
         if (ret == ESP_OK) {
-            // Send HTTP GET request
-            const char *http_request = "GET /get HTTP/1.1\r\nHost: httpbin.org\r\nConnection: close\r\n\r\n";
-            ret = sim7600e_tcp_send_string(http_request, 10000);
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "HTTP request sent successfully");
-            }
-            
-            // Wait a bit then disconnect
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            ESP_LOGI(TAG, "TCP Connected to %s:%d", tcp_config.host, tcp_config.port);
             sim7600e_tcp_disconnect();
+        } else {
+            ESP_LOGW(TAG, "First TCP attempt failed, trying HTTP server...");
+            
+            // Try a different server
+            strcpy(tcp_config.host, "httpbin.org");
+            tcp_config.port = 80;
+            ret = sim7600e_tcp_connect(&tcp_config);
+            if (ret == ESP_OK) {
+                ESP_LOGI(TAG, "TCP Connected to %s:%d", tcp_config.host, tcp_config.port);
+                sim7600e_tcp_disconnect();
+            } else {
+                ESP_LOGE(TAG, "TCP Error - both connection attempts failed");
+            }
         }
     }
     
     // Enable GNSS
     ESP_LOGI(TAG, "Enabling GNSS...");
     sim7600e_gnss_config_t gnss_config = sim7600e_gnss_get_default_config();
-    gnss_config.update_rate_ms = 2000; // Update every 2 seconds
-    
     ret = sim7600e_gnss_enable(&gnss_config);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to enable GNSS");
-    } else {
+    if (ret == ESP_OK) {
         ESP_LOGI(TAG, "GNSS enabled successfully");
-        
-        // Register GNSS callback
         sim7600e_gnss_register_callback(gnss_event_handler, NULL);
-        
-        // Start GNSS task
-        ret = sim7600e_gnss_start_task(5, 8192);  // Increased stack size to prevent overflow
-        if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to start GNSS task");
-        }
+        sim7600e_gnss_start_task(5, 8192);
     }
     
-    // Main application loop - demonstrate periodic operations
+    // Main loop
     ESP_LOGI(TAG, "Starting main loop...");
-    
     int loop_count = 0;
+    
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(10000)); // Wait 10 seconds
+        vTaskDelay(pdMS_TO_TICKS(10000));
         loop_count++;
-        
         ESP_LOGI(TAG, "Main loop iteration: %d", loop_count);
         
-        // Check network signal strength every 5 iterations (50 seconds)
+        // Check signal every 5 iterations
         if (loop_count % 5 == 0) {
-            ret = sim7600e_gsm_get_network_info(&net_info);
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "Signal strength: %d dBm", net_info.signal_strength);
+            sim7600e_network_info_t net_info;
+            if (sim7600e_gsm_get_network_info(&net_info) == ESP_OK) {
+                ESP_LOGI(TAG, "Signal: %d dBm", net_info.signal_strength);
             }
         }
-        
-        // Get GNSS info directly every 3 iterations (30 seconds)
-        if (loop_count % 3 == 0) {
-            sim7600e_gnss_info_t gnss_info;
-            ret = sim7600e_gnss_get_info(&gnss_info, 5000);
-            if (ret == ESP_OK && gnss_info.valid_fix) {
-                ESP_LOGI(TAG, "Direct GNSS query - Lat: %.6f, Lon: %.6f", 
-                         gnss_info.latitude, gnss_info.longitude);
-            }
-        }
-        
-        // Send SMS demonstration every 20 iterations (200 seconds)
-        // Uncomment and modify the phone number to test SMS functionality
-        /*
-        if (loop_count % 20 == 0) {
-            ret = sim7600e_gsm_send_sms("+1234567890", "Hello from ESP32!");
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "SMS sent successfully");
-            }
-        }
-        */
     }
 }

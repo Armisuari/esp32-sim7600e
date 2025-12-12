@@ -48,14 +48,6 @@ esp_err_t sim7600e_gsm_check_modem(void);
  */
 esp_err_t sim7600e_gsm_check_sim(void);
 
-/**
- * @brief Turn off echo mode
- * 
- * @return 
- *     - ESP_OK: Success
- *     - ESP_FAIL: Failed to turn off echo
- */
-esp_err_t sim7600e_gsm_turn_off_echo(void);
 
 /**
  * @brief Wait for network registration and time synchronization
