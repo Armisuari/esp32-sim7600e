@@ -129,6 +129,43 @@ esp_err_t sim7600e_gsm_make_call(const char *phone_number);
  */
 esp_err_t sim7600e_gsm_hang_up(void);
 
+/**
+ * @brief Subscribe to MQTT topic with proper two-step process
+ * 
+ * @param topic The MQTT topic to subscribe to
+ * @param qos Quality of service level (0, 1, or 2)
+ * @return 
+ *     - ESP_OK: Subscription successful
+ *     - ESP_FAIL: Subscription failed
+ *     - ESP_ERR_INVALID_ARG: Invalid parameters
+ *     - ESP_ERR_TIMEOUT: Operation timeout
+ */
+esp_err_t sim7600e_gsm_mqtt_subscribe(const char *topic, int qos);
+
+/**
+ * @brief Set MQTT topic with proper two-step process
+ * 
+ * @param topic The MQTT topic to set
+ * @return 
+ *     - ESP_OK: Topic set successfully
+ *     - ESP_FAIL: Topic setting failed
+ *     - ESP_ERR_INVALID_ARG: Invalid parameters
+ *     - ESP_ERR_TIMEOUT: Operation timeout
+ */
+esp_err_t sim7600e_gsm_mqtt_set_topic(const char *topic);
+
+/**
+ * @brief Set MQTT payload with proper two-step process
+ * 
+ * @param payload The MQTT payload to set
+ * @return 
+ *     - ESP_OK: Payload set successfully
+ *     - ESP_FAIL: Payload setting failed
+ *     - ESP_ERR_INVALID_ARG: Invalid parameters
+ *     - ESP_ERR_TIMEOUT: Operation timeout
+ */
+esp_err_t sim7600e_gsm_mqtt_set_payload(const char *payload);
+
 #ifdef __cplusplus
 }
 #endif

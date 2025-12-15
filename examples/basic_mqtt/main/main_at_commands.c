@@ -8,21 +8,29 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_mac.h"
+#include "driver/gpio.h"
 #include "cJSON.h"
 
-// Include the SIM7600E component headers - SAME AS BASIC_USAGE
+// Include the SIM7600E component headers
 #include "sim7600e.h"
 #include "sim7600e_gsm.h"
 
 static const char *TAG = "MQTT_AT_EXAMPLE";
 
-// MQTT and Network Configuration (simplified for testing)
+// MQTT and Network Configuration (based on Arduino reference)
 #define MQTT_BROKER_HOST    "test.mosquitto.org"
 #define MQTT_BROKER_PORT    "1883"
 #define APN_NAME            "internet"  // Change to your carrier's APN
 #define MQTT_CLIENT_ID      "esp32s3_client_test"
 #define MQTT_USERNAME       ""  // Update with your credentials
 #define MQTT_PASSWORD       ""  // Update with your credentials
+
+// GPIO Configuration (matching Arduino reference)
+#define GPIO_D0    GPIO_NUM_36
+#define GPIO_D1    GPIO_NUM_35  
+#define GPIO_D2    GPIO_NUM_32
+#define GPIO_D3    GPIO_NUM_33
+#define GPIO_R0    GPIO_NUM_4
 
 // Timing configuration
 #define PUBLISH_INTERVAL_MS     60000  // 1 minute
@@ -41,6 +49,7 @@ static esp_err_t publish_sensor_data(void);
 static esp_err_t handle_incoming_messages(void);
 static esp_err_t gsm_send_at_command(const char* command, char* response, size_t response_size, uint32_t timeout_ms);
 static void get_mac_address_string(void);
+static void init_gpio(void);
 static void mqtt_task(void *pvParameters);
 static bool is_network_connected(void);
 static bool is_gprs_connected(void);
@@ -56,16 +65,15 @@ static void get_mac_address_string(void) {
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     
     // Create topic strings
-    snprintf(uplink_topic, sizeof(uplink_topic), "DEME25/08/INPUTS/%s", device_mac_str);
-    snprintf(downlink_topic, sizeof(downlink_topic), "DEME25/08/OUTPUT");
+    snprintf(uplink_topic, sizeof(uplink_topic), "NORVI/INPUTS/%s", device_mac_str);
+    snprintf(downlink_topic, sizeof(downlink_topic), "NORVI/+/OUTPUT");
     
     ESP_LOGI(TAG, "Device MAC: %s", device_mac_str);
     ESP_LOGI(TAG, "Uplink topic: %s", uplink_topic);
     ESP_LOGI(TAG, "Downlink topic: %s", downlink_topic);
 }
 
-// Initialize GPIO pins - COMMENTED OUT TO MATCH BASIC_USAGE
-/*
+// Initialize GPIO pins
 static void init_gpio(void) {
     // Configure input pins
     gpio_config_t input_config = {
@@ -92,7 +100,6 @@ static void init_gpio(void) {
     
     ESP_LOGI(TAG, "GPIO initialized");
 }
-*/
 
 // Send AT command and get response
 static esp_err_t gsm_send_at_command(const char* command, char* response, size_t response_size, uint32_t timeout_ms) {
@@ -215,53 +222,51 @@ static esp_err_t connect_to_mqtt(void) {
     char command[256];
     esp_err_t ret;
     
-    // First, cleanup any existing MQTT state
-    gsm_send_at_command("AT+CMQTTDISC=0,60\r\n", response, sizeof(response), 2000);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    gsm_send_at_command("AT+CMQTTREL=0\r\n", response, sizeof(response), 2000);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    gsm_send_at_command("AT+CMQTTSTOP\r\n", response, sizeof(response), 2000);
-    vTaskDelay(pdMS_TO_TICKS(2000));
-    
     // Start MQTT service
-    ret = gsm_send_at_command("AT+CMQTTSTART\r\n", response, sizeof(response), 5000);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start MQTT service");
-        return ret;
-    }
+    ret = gsm_send_at_command("AT+CMQTTSTART\r\n", response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
     
     // Acquire a client
     snprintf(command, sizeof(command), "AT+CMQTTACCQ=0,\"%s\",0\r\n", MQTT_CLIENT_ID);
-    ret = gsm_send_at_command(command, response, sizeof(response), 5000);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to acquire MQTT client");
-        return ret;
-    }
+    ret = gsm_send_at_command(command, response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
     
-    // Skip will topic and message for now to test basic connection
+    // Set will topic
+    ret = gsm_send_at_command("AT+CMQTTWILLTOPIC=0,2\r\n", response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
     
-    // Connect to MQTT server (without credentials for test.mosquitto.org)
+    // Send will topic data
+    ret = gsm_send_at_command("01\x1A", response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
+    
+    // Set will message
+    ret = gsm_send_at_command("AT+CMQTTWILLMSG=0,6,1\r\n", response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
+    
+    // Send will message data
+    ret = gsm_send_at_command("qwerty\x1A", response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
+    
+    // Connect to MQTT server
     snprintf(command, sizeof(command), 
-             "AT+CMQTTCONNECT=0,\"tcp://%s:%s\",60,0\r\n",
-             MQTT_BROKER_HOST, MQTT_BROKER_PORT);
-    ret = gsm_send_at_command(command, response, sizeof(response), 15000);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to connect to MQTT broker");
-        return ret;
-    }
+             "AT+CMQTTCONNECT=0,\"tcp://%s:%s\",60,1,\"%s\",\"%s\"\r\n",
+             MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_USERNAME, MQTT_PASSWORD);
+    ret = gsm_send_at_command(command, response, sizeof(response), 10000);
+    if (ret != ESP_OK) return ret;
     
-    ESP_LOGI(TAG, "MQTT connected successfully!");
+    // Wait for connection to establish
+    vTaskDelay(pdMS_TO_TICKS(2000));
     
-    // Wait for connection to stabilize
-    vTaskDelay(pdMS_TO_TICKS(3000));
+    // Subscribe to downlink topic
+    int topic_len = strlen(downlink_topic);
+    snprintf(command, sizeof(command), "AT+CMQTTSUB=0,%d,1\r\n", topic_len);
+    ret = gsm_send_at_command(command, response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
     
-    // Subscribe to downlink topic using specialized function
-    ESP_LOGI(TAG, "Subscribing to topic: %s", downlink_topic);
-    ret = sim7600e_gsm_mqtt_subscribe(downlink_topic, 1);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to subscribe to topic: %s", downlink_topic);
-        return ret;
-    }
+    // Send subscription topic
+    snprintf(command, sizeof(command), "%s\x1A", downlink_topic);
+    ret = gsm_send_at_command(command, response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
     
     vTaskDelay(pdMS_TO_TICKS(2000));
     
@@ -269,20 +274,18 @@ static esp_err_t connect_to_mqtt(void) {
     return ESP_OK;
 }
 
-// Publish sensor data (equivalent to Arduino main loop publishing) - SIMPLIFIED FOR NOW
+// Publish sensor data (equivalent to Arduino main loop publishing)
 static esp_err_t publish_sensor_data(void) {
     char response[512];
     char command[256];
     char json_payload[256];
     esp_err_t ret;
     
-    // For now, just create dummy sensor data - will implement GPIO later
-    int d0_state = 0; // gpio_get_level(GPIO_D0);
-    int d1_state = 0; // gpio_get_level(GPIO_D1);
-    int d2_state = 0; // gpio_get_level(GPIO_D2);
-    int d3_state = 0; // gpio_get_level(GPIO_D3);
-    
-    ESP_LOGI(TAG, "Creating JSON with dummy data (GPIO integration TODO)");
+    // Read GPIO inputs
+    int d0_state = gpio_get_level(GPIO_D0);
+    int d1_state = gpio_get_level(GPIO_D1);
+    int d2_state = gpio_get_level(GPIO_D2);
+    int d3_state = gpio_get_level(GPIO_D3);
     
     // Create JSON payload
     cJSON *json = cJSON_CreateObject();
@@ -312,19 +315,26 @@ static esp_err_t publish_sensor_data(void) {
     
     ESP_LOGI(TAG, "Publishing sensor data: %s", json_payload);
     
-    // Set MQTT topic using specialized function
-    ret = sim7600e_gsm_mqtt_set_topic(uplink_topic);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set MQTT topic");
-        return ret;
-    }
+    // Set MQTT topic
+    int topic_len = strlen(uplink_topic);
+    snprintf(command, sizeof(command), "AT+CMQTTTOPIC=0,%d\r\n", topic_len);
+    ret = gsm_send_at_command(command, response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
     
-    // Set MQTT payload using specialized function
-    ret = sim7600e_gsm_mqtt_set_payload(json_payload);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set MQTT payload");
-        return ret;
-    }
+    // Send topic
+    ret = gsm_send_at_command(uplink_topic, response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
+    
+    // Set MQTT payload
+    int payload_len = strlen(json_payload);
+    snprintf(command, sizeof(command), "AT+CMQTTPAYLOAD=0,%d\r\n", payload_len);
+    ret = gsm_send_at_command(command, response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
+    
+    // Send payload
+    snprintf(command, sizeof(command), "%s\x1A", json_payload);
+    ret = gsm_send_at_command(command, response, sizeof(response), 1000);
+    if (ret != ESP_OK) return ret;
     
     // Publish message
     ret = gsm_send_at_command("AT+CMQTTPUB=0,1,60\r\n", response, sizeof(response), 1000);
@@ -364,8 +374,8 @@ static esp_err_t handle_incoming_messages(void) {
     return ESP_OK;
 }
 
-// Handle MQTT callback (equivalent to Arduino mqttCallback) - for future incoming message handling
-__attribute__((unused)) static void handle_mqtt_callback(const char* topic, const char* payload, int payload_len) {
+// Handle MQTT callback (equivalent to Arduino mqttCallback)
+static void handle_mqtt_callback(const char* topic, const char* payload, int payload_len) {
     ESP_LOGI(TAG, "Message arrived [%s]: %.*s", topic, payload_len, payload);
     
     // Extract MAC ID from topic (NORVI/<MAC>/OUTPUT)
@@ -396,10 +406,9 @@ __attribute__((unused)) static void handle_mqtt_callback(const char* topic, cons
         cJSON *state_item = cJSON_GetObjectItem(json, "state");
         if (cJSON_IsNumber(state_item)) {
             int state = (int)cJSON_GetNumberValue(state_item);
-            ESP_LOGI(TAG, "Setting relay state to: %d (GPIO integration TODO)", state);
+            ESP_LOGI(TAG, "Setting relay state to: %d", state);
             
-            // TODO: Implement GPIO control later
-            // gpio_set_level(GPIO_R0, state ? 1 : 0);
+            gpio_set_level(GPIO_R0, state ? 1 : 0);
         }
         
         cJSON_Delete(json);
@@ -460,7 +469,10 @@ void app_main(void) {
     // Get MAC address and setup topics
     get_mac_address_string();
     
-    // Initialize SIM7600E with default config - SAME AS BASIC_USAGE
+    // Initialize GPIO
+    init_gpio();
+    
+    // Initialize SIM7600E with default config
     sim7600e_config_t config = sim7600e_get_default_config();
     esp_err_t ret = sim7600e_init(&config);
     if (ret != ESP_OK) {
@@ -468,108 +480,66 @@ void app_main(void) {
         return;
     }
     
-    // Power on and wait for initialization - SAME AS BASIC_USAGE  
-    sim7600e_power_on();
+    // Power on the module
+    ESP_LOGI(TAG, "Powering on SIM7600E module...");
+    ret = sim7600e_power_on();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to power on SIM7600E: %s", esp_err_to_name(ret));
+        return;
+    }
+    
+    // Wait for module initialization
     ESP_LOGI(TAG, "Waiting for module initialization...");
     vTaskDelay(pdMS_TO_TICKS(10000));
     
-    // Check modem status - SAME AS BASIC_USAGE
+    // Check modem
     ret = sim7600e_gsm_check_modem();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Modem check failed");
+        ESP_LOGE(TAG, "Modem not responding: %s", esp_err_to_name(ret));
         return;
     }
     
-    // Check SIM card - SAME AS BASIC_USAGE
+    // Check SIM card
     ESP_LOGI(TAG, "Checking SIM card...");
     ret = sim7600e_gsm_check_sim();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SIM card check failed");
+        ESP_LOGE(TAG, "SIM card not detected: %s", esp_err_to_name(ret));
         return;
     }
     
-    // Get module information - SAME AS BASIC_USAGE
-    char imei[32] = {0};
-    ret = sim7600e_get_module_info(imei, sizeof(imei));
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Module IMEI: %s", imei);
-    }
-    
-    // Wait for network registration - SAME AS BASIC_USAGE  
-    ESP_LOGI(TAG, "Waiting for network registration...");
-    ret = sim7600e_gsm_wait_for_network(60000);
+    // Initialize network connection
+    ret = init_network();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Network registration failed");
+        ESP_LOGE(TAG, "Failed to initialize network: %s", esp_err_to_name(ret));
         return;
     }
     
-    // Get network information - SAME AS BASIC_USAGE
-    sim7600e_network_info_t net_info = {0};
-    ret = sim7600e_gsm_get_network_info(&net_info);
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Operator: %s, Signal: %d dBm", 
-                 net_info.operator_name, net_info.signal_strength);
-        ESP_LOGI(TAG, "Network time: %s", net_info.network_time);
+    // Connect to GPRS
+    ret = connect_to_gprs();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to connect to GPRS: %s", esp_err_to_name(ret));
+        return;
     }
     
-    // Enable internet connection - SAME AS BASIC_USAGE
-    ESP_LOGI(TAG, "Enabling internet connection...");
-    ret = sim7600e_gsm_enable_internet("internet");
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Internet connection established");
-        
-        // Wait a bit for network to stabilize - SAME AS BASIC_USAGE
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        
-        // TEST BASIC MQTT CONNECTIVITY FIRST
-        ESP_LOGI(TAG, "Testing basic AT command connectivity...");
-        char response[256];
-        ret = sim7600e_gsm_send_at_command("AT\r\n", response, sizeof(response), 3000);
-        if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "AT command test successful: %s", response);
-            
-            // Now try basic MQTT setup
-            ESP_LOGI(TAG, "Starting basic MQTT test...");
-            ret = init_network();
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "Network initialization successful!");
-                
-                ret = connect_to_mqtt();
-                if (ret == ESP_OK) {
-                    ESP_LOGI(TAG, "MQTT connection successful!");
-                    ESP_LOGI(TAG, "Publishing to: %s", uplink_topic);
-                    ESP_LOGI(TAG, "Subscribed to: %s", downlink_topic);
-                    
-                    // Start MQTT task
-                    xTaskCreate(mqtt_task, "mqtt_task", 8192, NULL, 5, NULL);
-                } else {
-                    ESP_LOGE(TAG, "MQTT connection failed");
-                }
-            } else {
-                ESP_LOGE(TAG, "Network initialization failed");
-            }
-        } else {
-            ESP_LOGE(TAG, "AT command test failed");
-        }
-    } else {
-        ESP_LOGE(TAG, "Internet connection failed");
+    // Connect to MQTT
+    ret = connect_to_mqtt();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to connect to MQTT: %s", esp_err_to_name(ret));
+        return;
     }
     
-    // Main loop - keep the application running - SAME AS BASIC_USAGE
-    ESP_LOGI(TAG, "Starting main loop...");
-    int loop_count = 0;
+    ESP_LOGI(TAG, "MQTT connection established successfully!");
+    ESP_LOGI(TAG, "Publishing to: %s", uplink_topic);
+    ESP_LOGI(TAG, "Subscribed to: %s", downlink_topic);
     
+    // Start MQTT task
+    xTaskCreate(mqtt_task, "mqtt_task", 8192, NULL, 5, NULL);
+    
+    ESP_LOGI(TAG, "MQTT AT Commands example running!");
+    
+    // Main loop - keep the application running
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(10000));
-        loop_count++;
-        ESP_LOGI(TAG, "Main loop iteration: %d", loop_count);
-        
-        // Check signal every 5 iterations - SAME AS BASIC_USAGE
-        if (loop_count % 5 == 0) {
-            sim7600e_network_info_t net_info;
-            if (sim7600e_gsm_get_network_info(&net_info) == ESP_OK) {
-                ESP_LOGI(TAG, "Signal: %d dBm", net_info.signal_strength);
-            }
-        }
+        ESP_LOGI(TAG, "Main loop - MQTT example running...");
     }
 }

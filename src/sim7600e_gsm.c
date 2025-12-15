@@ -392,6 +392,278 @@ esp_err_t sim7600e_gsm_hang_up(void)
     }
 }
 
+esp_err_t sim7600e_gsm_mqtt_subscribe(const char *topic, int qos)
+{
+    if (topic == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    SemaphoreHandle_t mutex = sim7600e_get_mutex();
+    QueueHandle_t resp_queue = sim7600e_get_resp_queue();
+    QueueHandle_t urc_queue = sim7600e_get_urc_queue();
+    int uart_port = sim7600e_get_uart_port();
+    
+    if (mutex == NULL || resp_queue == NULL || urc_queue == NULL) {
+        ESP_LOGE(TAG, "SIM7600E not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Take mutex
+    if (xSemaphoreTake(mutex, pdMS_TO_TICKS(10000)) != pdTRUE) {
+        ESP_LOGE(TAG, "Failed to take mutex for MQTT subscribe");
+        return ESP_ERR_TIMEOUT;
+    }
+    
+    // Clear both queues
+    sim7600e_msg_t dummy_msg;
+    while (xQueueReceive(resp_queue, &dummy_msg, 0) == pdTRUE) {}
+    while (xQueueReceive(urc_queue, &dummy_msg, 0) == pdTRUE) {}
+    
+    // Step 1: Send subscription command
+    char sub_cmd[64];
+    snprintf(sub_cmd, sizeof(sub_cmd), "AT+CMQTTSUB=0,%d,%d\r\n", strlen(topic), qos);
+    
+    ESP_LOGI(TAG, "Sending MQTT subscribe command: %s", sub_cmd);
+    if (uart_write_bytes(uart_port, sub_cmd, strlen(sub_cmd)) != strlen(sub_cmd)) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Failed to send MQTT subscribe command");
+        return ESP_FAIL;
+    }
+    
+    // Wait a moment for command to be processed
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    
+    // Step 2: Send topic with Ctrl+Z
+    char topic_cmd[128];
+    snprintf(topic_cmd, sizeof(topic_cmd), "%s\x1A", topic);
+    
+    ESP_LOGI(TAG, "Sending topic string: %s", topic);
+    if (uart_write_bytes(uart_port, topic_cmd, strlen(topic_cmd)) != strlen(topic_cmd)) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Failed to send topic string");
+        return ESP_FAIL;
+    }
+    
+    // Wait for subscription confirmation
+    char combined_response[512] = {0};
+    sim7600e_msg_t resp_msg;
+    TickType_t timeout_ticks = pdMS_TO_TICKS(10000);
+    TickType_t start_time = xTaskGetTickCount();
+    bool got_response = false;
+    
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_response) {
+        // Check both queues for response
+        if (xQueueReceive(resp_queue, &resp_msg, 100) == pdTRUE) {
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) {
+                    strcat(combined_response, " ");
+                }
+                strcat(combined_response, resp_msg.data);
+            }
+            
+            if (strstr(resp_msg.data, "OK") || strstr(resp_msg.data, "CMQTTSUB") || strstr(resp_msg.data, "ERROR")) {
+                got_response = true;
+            }
+        }
+        
+        if (xQueueReceive(urc_queue, &resp_msg, 100) == pdTRUE) {
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) {
+                    strcat(combined_response, " ");
+                }
+                strcat(combined_response, resp_msg.data);
+            }
+            
+            if (strstr(resp_msg.data, "OK") || strstr(resp_msg.data, "CMQTTSUB") || strstr(resp_msg.data, "ERROR")) {
+                got_response = true;
+            }
+        }
+        
+        if (!got_response) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+    }
+    
+    xSemaphoreGive(mutex);
+    
+    if (got_response) {
+        ESP_LOGI(TAG, "MQTT subscription response: %s", combined_response);
+        if (strstr(combined_response, "ERROR")) {
+            ESP_LOGE(TAG, "MQTT subscription failed");
+            return ESP_FAIL;
+        } else {
+            ESP_LOGI(TAG, "MQTT subscription successful");
+            return ESP_OK;
+        }
+    } else {
+        ESP_LOGE(TAG, "MQTT subscription timeout");
+        return ESP_ERR_TIMEOUT;
+    }
+}
+
+esp_err_t sim7600e_gsm_mqtt_set_topic(const char *topic)
+{
+    if (topic == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    SemaphoreHandle_t mutex = sim7600e_get_mutex();
+    QueueHandle_t resp_queue = sim7600e_get_resp_queue();
+    QueueHandle_t urc_queue = sim7600e_get_urc_queue();
+    int uart_port = sim7600e_get_uart_port();
+    
+    if (mutex == NULL || resp_queue == NULL || urc_queue == NULL) {
+        ESP_LOGE(TAG, "SIM7600E not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Take mutex
+    if (xSemaphoreTake(mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        ESP_LOGE(TAG, "Failed to take mutex for MQTT set topic");
+        return ESP_ERR_TIMEOUT;
+    }
+    
+    // Clear both queues
+    sim7600e_msg_t dummy_msg;
+    while (xQueueReceive(resp_queue, &dummy_msg, 0) == pdTRUE) {}
+    while (xQueueReceive(urc_queue, &dummy_msg, 0) == pdTRUE) {}
+    
+    // Step 1: Send topic command
+    char topic_cmd[64];
+    snprintf(topic_cmd, sizeof(topic_cmd), "AT+CMQTTTOPIC=0,%d\r\n", strlen(topic));
+    
+    ESP_LOGI(TAG, "Setting MQTT topic, length: %d", strlen(topic));
+    if (uart_write_bytes(uart_port, topic_cmd, strlen(topic_cmd)) != strlen(topic_cmd)) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Failed to send MQTT topic command");
+        return ESP_FAIL;
+    }
+    
+    // Wait for prompt
+    vTaskDelay(pdMS_TO_TICKS(500));
+    
+    // Step 2: Send topic string
+    ESP_LOGI(TAG, "Sending topic: %s", topic);
+    if (uart_write_bytes(uart_port, topic, strlen(topic)) != strlen(topic)) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Failed to send topic string");
+        return ESP_FAIL;
+    }
+    
+    // Wait for OK response
+    char combined_response[256] = {0};
+    sim7600e_msg_t resp_msg;
+    TickType_t timeout_ticks = pdMS_TO_TICKS(3000);
+    TickType_t start_time = xTaskGetTickCount();
+    bool got_response = false;
+    
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_response) {
+        if (xQueueReceive(resp_queue, &resp_msg, 50) == pdTRUE || xQueueReceive(urc_queue, &resp_msg, 50) == pdTRUE) {
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) strcat(combined_response, " ");
+                strcat(combined_response, resp_msg.data);
+            }
+            if (strstr(resp_msg.data, "OK") || strstr(resp_msg.data, "ERROR")) {
+                got_response = true;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    
+    xSemaphoreGive(mutex);
+    
+    if (got_response && !strstr(combined_response, "ERROR")) {
+        ESP_LOGI(TAG, "MQTT topic set successfully");
+        return ESP_OK;
+    } else {
+        ESP_LOGE(TAG, "Failed to set MQTT topic: %s", combined_response);
+        return ESP_FAIL;
+    }
+}
+
+esp_err_t sim7600e_gsm_mqtt_set_payload(const char *payload)
+{
+    if (payload == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    SemaphoreHandle_t mutex = sim7600e_get_mutex();
+    QueueHandle_t resp_queue = sim7600e_get_resp_queue();
+    QueueHandle_t urc_queue = sim7600e_get_urc_queue();
+    int uart_port = sim7600e_get_uart_port();
+    
+    if (mutex == NULL || resp_queue == NULL || urc_queue == NULL) {
+        ESP_LOGE(TAG, "SIM7600E not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Take mutex
+    if (xSemaphoreTake(mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        ESP_LOGE(TAG, "Failed to take mutex for MQTT set payload");
+        return ESP_ERR_TIMEOUT;
+    }
+    
+    // Clear both queues
+    sim7600e_msg_t dummy_msg;
+    while (xQueueReceive(resp_queue, &dummy_msg, 0) == pdTRUE) {}
+    while (xQueueReceive(urc_queue, &dummy_msg, 0) == pdTRUE) {}
+    
+    // Step 1: Send payload length command
+    char payload_cmd[64];
+    snprintf(payload_cmd, sizeof(payload_cmd), "AT+CMQTTPAYLOAD=0,%d\r\n", strlen(payload));
+    
+    ESP_LOGI(TAG, "Setting MQTT payload, length: %d", strlen(payload));
+    if (uart_write_bytes(uart_port, payload_cmd, strlen(payload_cmd)) != strlen(payload_cmd)) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Failed to send MQTT payload command");
+        return ESP_FAIL;
+    }
+    
+    // Wait for prompt
+    vTaskDelay(pdMS_TO_TICKS(500));
+    
+    // Step 2: Send payload with Ctrl+Z
+    char payload_with_terminator[512];
+    snprintf(payload_with_terminator, sizeof(payload_with_terminator), "%s\x1A", payload);
+    
+    ESP_LOGI(TAG, "Sending payload with terminator");
+    if (uart_write_bytes(uart_port, payload_with_terminator, strlen(payload_with_terminator)) != strlen(payload_with_terminator)) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Failed to send payload");
+        return ESP_FAIL;
+    }
+    
+    // Wait for OK response
+    char combined_response[256] = {0};
+    sim7600e_msg_t resp_msg;
+    TickType_t timeout_ticks = pdMS_TO_TICKS(3000);
+    TickType_t start_time = xTaskGetTickCount();
+    bool got_response = false;
+    
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_response) {
+        if (xQueueReceive(resp_queue, &resp_msg, 50) == pdTRUE || xQueueReceive(urc_queue, &resp_msg, 50) == pdTRUE) {
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) strcat(combined_response, " ");
+                strcat(combined_response, resp_msg.data);
+            }
+            if (strstr(resp_msg.data, "OK") || strstr(resp_msg.data, "ERROR")) {
+                got_response = true;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    
+    xSemaphoreGive(mutex);
+    
+    if (got_response && !strstr(combined_response, "ERROR")) {
+        ESP_LOGI(TAG, "MQTT payload set successfully");
+        return ESP_OK;
+    } else {
+        ESP_LOGE(TAG, "Failed to set MQTT payload: %s", combined_response);
+        return ESP_FAIL;
+    }
+}
+
 // Internal function implementation
 static esp_err_t send_at_command_internal(const char *cmd, char *response, size_t resp_size, uint32_t timeout_ms)
 {
