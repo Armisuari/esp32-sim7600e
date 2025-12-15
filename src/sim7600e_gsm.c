@@ -759,3 +759,29 @@ static esp_err_t send_at_command_internal(const char *cmd, char *response, size_
         return ESP_ERR_TIMEOUT;
     }
 }
+
+esp_err_t sim7600e_gsm_mqtt_ssl_config(int client_id, int ssl_enable) {
+    if (client_id < 0 || client_id > 5) {
+        ESP_LOGE(TAG, "Invalid client ID: %d", client_id);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (ssl_enable != 0 && ssl_enable != 1) {
+        ESP_LOGE(TAG, "Invalid SSL enable value: %d", ssl_enable);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    char command[64];
+    char response[256];
+    
+    snprintf(command, sizeof(command), "AT+CMQTTSSLCFG=%d,%d\r\n", client_id, ssl_enable);
+    
+    esp_err_t ret = sim7600e_gsm_send_at_command(command, response, sizeof(response), 5000);
+    if (ret != ESP_OK || !strstr(response, "OK")) {
+        ESP_LOGE(TAG, "MQTT SSL config failed: %s", response);
+        return ESP_FAIL;
+    }
+    
+    ESP_LOGI(TAG, "MQTT SSL configured: client_id=%d, ssl_enable=%d", client_id, ssl_enable);
+    return ESP_OK;
+}
