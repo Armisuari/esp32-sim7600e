@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include <string.h>
 #include <stdio.h>
+#include "driver/uart.h"
 
 static const char *TAG = "SIM7600E_GSM";
 
@@ -317,6 +318,142 @@ esp_err_t sim7600e_gsm_send_at_command(const char *cmd, char *response, size_t r
     }
     
     return send_at_command_internal(cmd, response, resp_size, timeout_ms);
+}
+
+esp_err_t download_certificates_to_module(const char *fil_cert, const uint8_t *cert_start, const uint8_t *cert_end)
+{
+    if (fil_cert == NULL || cert_start == NULL || cert_end == NULL || cert_end <= cert_start) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    SemaphoreHandle_t mutex = sim7600e_get_mutex();
+    QueueHandle_t resp_queue = sim7600e_get_resp_queue();
+    QueueHandle_t urc_queue = sim7600e_get_urc_queue();
+    int uart_port = sim7600e_get_uart_port();
+    
+    if (mutex == NULL || resp_queue == NULL || urc_queue == NULL) {
+        ESP_LOGE(TAG, "SIM7600E not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Take mutex
+    if (xSemaphoreTake(mutex, pdMS_TO_TICKS(15000)) != pdTRUE) {
+        ESP_LOGE(TAG, "Failed to take mutex for certificate download");
+        return ESP_ERR_TIMEOUT;
+    }
+    
+    // Clear both queues
+    sim7600e_msg_t dummy_msg;
+    while (xQueueReceive(resp_queue, &dummy_msg, 0) == pdTRUE) {}
+    while (xQueueReceive(urc_queue, &dummy_msg, 0) == pdTRUE) {}
+
+    char cmd[256];
+    size_t cert_size = cert_end - cert_start;
+    ESP_LOGI(TAG, "Downloading certificate '%s' of size %d bytes to module", fil_cert, (int)cert_size);
+    
+    // Send AT+CCERTDOWN command with correct termination
+    snprintf(cmd, sizeof(cmd), "AT+CCERTDOWN=\"%s\",%d\r\n", fil_cert, (int)cert_size);
+    printf("send command %s", cmd); // cmd already has \n
+    
+    if (uart_write_bytes(uart_port, cmd, strlen(cmd)) != strlen(cmd)) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Failed to send CCERTDOWN command");
+        return ESP_FAIL;
+    }
+    
+    // Wait for prompt '>'
+    // We expect the prompt specifically.
+    sim7600e_msg_t resp_msg;
+    TickType_t timeout_ticks = pdMS_TO_TICKS(5000); // 5s timeout for prompt
+    TickType_t start_time = xTaskGetTickCount();
+    bool got_prompt = false;
+    char combined_response[512] = {0};
+
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_prompt) {
+        // Check queues
+        if (xQueueReceive(resp_queue, &resp_msg, 50) == pdTRUE || xQueueReceive(urc_queue, &resp_msg, 50) == pdTRUE) {
+            ESP_LOGD(TAG, "Got resp: %s", resp_msg.data);
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) strcat(combined_response, " ");
+                    strcat(combined_response, resp_msg.data);
+            }
+            
+            if (strstr(resp_msg.data, ">")) {
+                got_prompt = true;
+            } else if (strstr(resp_msg.data, "ERROR")) {
+                // Fail early if ERROR
+                xSemaphoreGive(mutex);
+                ESP_LOGE(TAG, "CCERTDOWN command failed: %s", resp_msg.data);
+                return ESP_FAIL;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    if (!got_prompt) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Timeout waiting for '>' prompt. Resp: %s", combined_response);
+        return ESP_ERR_TIMEOUT;
+    }
+
+    // Write certificate data in chunks
+    const size_t chunk_size = 256;
+    size_t offset = 0;
+    int total_written = 0;
+    
+    ESP_LOGI(TAG, "Writing certificate data in chunks...");
+    while (offset < cert_size) {
+        size_t remaining = cert_size - offset;
+        size_t write_size = (remaining < chunk_size) ? remaining : chunk_size;
+        
+        int written = uart_write_bytes(uart_port, (const char *)(cert_start + offset), write_size);
+        if (written < 0) {
+            xSemaphoreGive(mutex);
+            ESP_LOGE(TAG, "Failed to write certificate chunk at offset %d", (int)offset);
+            return ESP_FAIL;
+        }
+        
+        total_written += written;
+        offset += written;
+        
+        vTaskDelay(pdMS_TO_TICKS(20)); // Give slight delay for UART buffer/Module processing
+        
+        ESP_LOGD(TAG, "Written %d/%d bytes", total_written, (int)cert_size);
+    }
+    
+    // Wait for Final OK
+    // Reboot or next commands might happen, but we should just expect OK after download
+    timeout_ticks = pdMS_TO_TICKS(10000); // 10s timeout for write confirmation
+    start_time = xTaskGetTickCount();
+    bool got_ok = false;
+    memset(combined_response, 0, sizeof(combined_response));
+
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_ok) {
+        if (xQueueReceive(resp_queue, &resp_msg, 50) == pdTRUE || xQueueReceive(urc_queue, &resp_msg, 50) == pdTRUE) {
+             if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) strcat(combined_response, " ");
+                strcat(combined_response, resp_msg.data);
+            }
+            if (strstr(resp_msg.data, "OK")) {
+                got_ok = true;
+            } else if (strstr(resp_msg.data, "ERROR")) {
+                 xSemaphoreGive(mutex);
+                 ESP_LOGE(TAG, "Certificate write cleanup failed: %s", resp_msg.data);
+                 return ESP_FAIL;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    xSemaphoreGive(mutex);
+
+    if (!got_ok) {
+        ESP_LOGE(TAG, "Timeout waiting for upload confirmation. Resp: %s", combined_response);
+        return ESP_ERR_TIMEOUT;
+    }
+
+    ESP_LOGI(TAG, "Certificate downloaded successfully: %s (%d bytes)", fil_cert, total_written);
+    return ESP_OK;
 }
 
 esp_err_t sim7600e_gsm_send_sms(const char *phone_number, const char *message)
@@ -677,8 +814,10 @@ static esp_err_t send_at_command_internal(const char *cmd, char *response, size_
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Take mutex
-    if (xSemaphoreTake(mutex, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
+    // Take mutex with sufficient timeout to wait for any ongoing operations
+    // Use at least 15 seconds to accommodate long-running operations like shadow updates
+    uint32_t mutex_timeout = (timeout_ms > 15000) ? timeout_ms : 15000;
+    if (xSemaphoreTake(mutex, pdMS_TO_TICKS(mutex_timeout)) != pdTRUE) {
         ESP_LOGE(TAG, "Failed to take mutex");
         return ESP_ERR_TIMEOUT;
     }
@@ -728,6 +867,8 @@ static esp_err_t send_at_command_internal(const char *cmd, char *response, size_
             
             if (strstr(resp_msg.data, "OK") || strstr(resp_msg.data, "ERROR")) {
                 got_final_response = true;
+            } else if (strstr(resp_msg.data, ">")) {
+                // Prompt received, continue waiting
             }
         }
         

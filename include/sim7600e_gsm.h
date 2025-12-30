@@ -98,6 +98,19 @@ esp_err_t sim7600e_gsm_get_network_info(sim7600e_network_info_t *info);
 esp_err_t sim7600e_gsm_send_at_command(const char *cmd, char *response, size_t resp_size, uint32_t timeout_ms);
 
 /**
+ * @brief Download certificates to SIM7600E module
+ * 
+ * @param fil_cert Certificate file name on module
+ * @param cert_start Pointer to start of certificate data
+ * @param cert_end Pointer to end of certificate data
+ * @return 
+ *     - ESP_OK: Certificates downloaded successfully
+ *     - ESP_ERR_INVALID_ARG: Invalid arguments
+ *     - ESP_FAIL: Failed to download certificates
+ */
+esp_err_t download_certificates_to_module(const char *fil_cert, const uint8_t *cert_start, const uint8_t *cert_end);
+
+/**
  * @brief Send SMS message
  * 
  * @param phone_number Destination phone number

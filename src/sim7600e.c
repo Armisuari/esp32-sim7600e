@@ -344,6 +344,25 @@ static void uart_reader_task(void *arg)
             for (int i = 0; i < len; i++) {
                 char c = (char)data[i];
                 
+                // Handle prompt character '>' specially
+                // Prompts often don't end with \r\n, so we must detect and forward them immediately
+                if (c == '>') {
+                     if (line_pos < sizeof(line_buffer) - 1) {
+                        line_buffer[line_pos++] = c;
+                     }
+                     line_buffer[line_pos] = '\0';
+                     
+                     sim7600e_msg_t msg; 
+                     memset(&msg, 0, sizeof(msg));
+                     strncpy(msg.data, line_buffer, sizeof(msg.data) - 1);
+                     
+                     if (s_sim7600e_ctx.resp_queue) {
+                        xQueueSend(s_sim7600e_ctx.resp_queue, &msg, 0);
+                     }
+                     line_pos = 0; 
+                     continue;
+                }
+
                 if (c == '\n' || c == '\r') {
                     if (line_pos > 0) {
                         line_buffer[line_pos] = '\0';
