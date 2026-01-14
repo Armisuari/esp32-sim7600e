@@ -429,8 +429,15 @@ static void uart_reader_task(void *arg)
                         }
                         
                         // Normal message classification
-                        if (msg.data[0] == '+') {
-                            // URC message
+                        // Special handling for GNSS responses - route to resp_queue
+                        // so GNSS task can receive them without MQTT URC task interference
+                        if (strstr(msg.data, "+CGPSINFO") != NULL) {
+                            // GNSS response goes to response queue, not URC queue
+                            if (s_sim7600e_ctx.resp_queue) {
+                                xQueueSend(s_sim7600e_ctx.resp_queue, &msg, 0);
+                            }
+                        } else if (msg.data[0] == '+') {
+                            // Other URC messages
                             if (s_sim7600e_ctx.urc_queue) {
                                 xQueueSend(s_sim7600e_ctx.urc_queue, &msg, 0);
                             }
