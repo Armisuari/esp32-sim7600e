@@ -249,6 +249,10 @@ esp_err_t sim7600e_gsm_get_network_info(sim7600e_network_info_t *info)
         return ESP_ERR_INVALID_ARG;
     }
     
+    // Initialize struct to known values
+    memset(info, 0, sizeof(*info));
+    info->signal_strength = -999;  // Unknown by default
+    
     char response[256];
     
     // Get signal strength

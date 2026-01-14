@@ -330,12 +330,16 @@ static void cleanup_resources(void)
     uart_driver_delete(s_sim7600e_ctx.config.uart_port);
 }
 
-// UART reader task - simplified version of the original
+// UART reader task - handles URCs and responses including multi-line MQTT data
 static void uart_reader_task(void *arg)
 {
     uint8_t data[128];
     char line_buffer[SIM7600E_MSG_LEN];
     int line_pos = 0;
+    
+    // State machine for MQTT RX multi-line data
+    // 0 = normal, 1 = expecting topic data, 2 = expecting payload data
+    int mqtt_rx_state = 0;
 
     while (1) {
         int len = uart_read_bytes(s_sim7600e_ctx.config.uart_port, data, sizeof(data), pdMS_TO_TICKS(100));
@@ -372,7 +376,59 @@ static void uart_reader_task(void *arg)
                         memset(&msg, 0, sizeof(msg));
                         strncpy(msg.data, line_buffer, sizeof(msg.data) - 1);
                         
-                        // Classify and queue message
+                        // Check for MQTT RX state transitions
+                        if (strstr(msg.data, "+CMQTTRXTOPIC:") != NULL) {
+                            // Queue the header
+                            if (s_sim7600e_ctx.urc_queue) {
+                                xQueueSend(s_sim7600e_ctx.urc_queue, &msg, 0);
+                            }
+                            mqtt_rx_state = 1; // Next line is topic data
+                            line_pos = 0;
+                            continue;
+                        } else if (strstr(msg.data, "+CMQTTRXPAYLOAD:") != NULL) {
+                            // Queue the header
+                            if (s_sim7600e_ctx.urc_queue) {
+                                xQueueSend(s_sim7600e_ctx.urc_queue, &msg, 0);
+                            }
+                            mqtt_rx_state = 2; // Next line is payload data
+                            line_pos = 0;
+                            continue;
+                        } else if (strstr(msg.data, "+CMQTTRXEND:") != NULL) {
+                            mqtt_rx_state = 0; // Reset state
+                            // Queue the end marker
+                            if (s_sim7600e_ctx.urc_queue) {
+                                xQueueSend(s_sim7600e_ctx.urc_queue, &msg, 0);
+                            }
+                            line_pos = 0;
+                            continue;
+                        }
+                        
+                        // Handle MQTT RX data lines (topic or payload content)
+                        if (mqtt_rx_state == 1) {
+                            // This is topic data - prefix it for identification
+                            sim7600e_msg_t topic_msg;
+                            memset(&topic_msg, 0, sizeof(topic_msg));
+                            snprintf(topic_msg.data, sizeof(topic_msg.data), "+CMQTTRXTOPIC_DATA:%s", msg.data);
+                            if (s_sim7600e_ctx.urc_queue) {
+                                xQueueSend(s_sim7600e_ctx.urc_queue, &topic_msg, 0);
+                            }
+                            mqtt_rx_state = 0; // Topic received
+                            line_pos = 0;
+                            continue;
+                        } else if (mqtt_rx_state == 2) {
+                            // This is payload data - prefix it for identification
+                            sim7600e_msg_t payload_msg;
+                            memset(&payload_msg, 0, sizeof(payload_msg));
+                            snprintf(payload_msg.data, sizeof(payload_msg.data), "+CMQTTRXPAYLOAD_DATA:%s", msg.data);
+                            if (s_sim7600e_ctx.urc_queue) {
+                                xQueueSend(s_sim7600e_ctx.urc_queue, &payload_msg, 0);
+                            }
+                            mqtt_rx_state = 0; // Payload received
+                            line_pos = 0;
+                            continue;
+                        }
+                        
+                        // Normal message classification
                         if (msg.data[0] == '+') {
                             // URC message
                             if (s_sim7600e_ctx.urc_queue) {
