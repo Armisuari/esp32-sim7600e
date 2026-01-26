@@ -37,6 +37,7 @@ typedef struct {
     SemaphoreHandle_t mutex;
     SemaphoreHandle_t gnss_ready_sem;
     TaskHandle_t uart_reader_task_handle;
+    volatile bool uart_task_paused;  // Flag for cooperative suspension
 } sim7600e_context_t;
 
 static sim7600e_context_t s_sim7600e_ctx = {0};
@@ -342,6 +343,12 @@ static void uart_reader_task(void *arg)
     int mqtt_rx_state = 0;
 
     while (1) {
+        // Check if task should pause (for direct UART access like OTA)
+        if (s_sim7600e_ctx.uart_task_paused) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        
         int len = uart_read_bytes(s_sim7600e_ctx.config.uart_port, data, sizeof(data), pdMS_TO_TICKS(100));
         
         if (len > 0) {
@@ -488,4 +495,20 @@ int sim7600e_get_uart_port(void)
 SemaphoreHandle_t sim7600e_get_mutex(void)
 {
     return s_sim7600e_ctx.mutex;
+}
+
+void sim7600e_suspend_uart_task(void)
+{
+    // Use cooperative suspension via flag - safer than vTaskSuspend
+    // because it allows the task to finish its current uart_read_bytes call
+    s_sim7600e_ctx.uart_task_paused = true;
+    // Wait a bit for the task to see the flag and pause
+    vTaskDelay(pdMS_TO_TICKS(150));  // Must be > uart_read_bytes timeout (100ms)
+    ESP_LOGI(TAG, "UART reader task suspended (cooperative)");
+}
+
+void sim7600e_resume_uart_task(void)
+{
+    s_sim7600e_ctx.uart_task_paused = false;
+    ESP_LOGI(TAG, "UART reader task resumed");
 }
