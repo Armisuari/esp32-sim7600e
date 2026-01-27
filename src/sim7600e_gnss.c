@@ -327,7 +327,7 @@ static esp_err_t gnss_get_info_non_blocking(sim7600e_gnss_info_t *info, uint32_t
     xSemaphoreGive(mutex);
     
     if (!got_final_response || !got_cgpsinfo) {
-        ESP_LOGD(TAG, "GNSS: No response received");
+        ESP_LOGW(TAG, "GNSS: No complete response received (got_cgps=%d, got_final=%d)", got_cgpsinfo, got_final_response);
         return ESP_ERR_TIMEOUT;
     }
     
@@ -475,9 +475,11 @@ static bool parse_gps_response(const char *response, sim7600e_gnss_info_t *info)
     
     // Check for empty response (no fix): +CGPSINFO: ,,,,,,,,
     if (*cgps_start == ',' || strncmp(cgps_start, ",,", 2) == 0) {
-        ESP_LOGD(TAG, "GNSS acquiring satellites (no fix yet)");
+        ESP_LOGW(TAG, "GNSS raw data (no fix): '%s'", cgps_start);
         return true;
     }
+    
+    ESP_LOGI(TAG, "GNSS raw data (parsing): '%s'", cgps_start);
     
     // Parse the response: +CGPSINFO: lat,latNS,lon,lonEW,date,time,alt,speed,course
     char lat_str[16] = {0}, lat_ns[2] = {0}, lon_str[16] = {0}, lon_ew[2] = {0};
