@@ -443,6 +443,11 @@ static void uart_reader_task(void *arg)
                             if (s_sim7600e_ctx.resp_queue) {
                                 xQueueSend(s_sim7600e_ctx.resp_queue, &msg, 0);
                             }
+                        } else if (strstr(msg.data, "+CSQ:") != NULL) {
+                            // Signal quality response goes to response queue
+                            if (s_sim7600e_ctx.resp_queue) {
+                                xQueueSend(s_sim7600e_ctx.resp_queue, &msg, 0);
+                            }
                         } else if (msg.data[0] == '+') {
                             // Other URC messages
                             if (s_sim7600e_ctx.urc_queue) {
