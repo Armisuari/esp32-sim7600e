@@ -83,6 +83,16 @@ esp_err_t sim7600e_gsm_enable_internet(const char *apn);
 esp_err_t sim7600e_gsm_get_network_info(sim7600e_network_info_t *info);
 
 /**
+ * @brief Synchronize time with NTP server
+ * 
+ * @param ntp_server NTP server address (use NULL for default pool.ntp.org)
+ * @return 
+ *     - ESP_OK: Time synchronized successfully
+ *     - ESP_FAIL: Failed to sync with NTP server
+ */
+esp_err_t sim7600e_gsm_sync_ntp_time(const char *ntp_server);
+
+/**
  * @brief Send raw AT command
  * 
  * @param cmd AT command string

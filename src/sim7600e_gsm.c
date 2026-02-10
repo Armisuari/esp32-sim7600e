@@ -49,6 +49,10 @@ esp_err_t sim7600e_gsm_check_modem(void)
     sim7600e_gsm_send_at_command("AT+CREG=2\r\n", response, sizeof(response), 5000);
     sim7600e_gsm_send_at_command("ATE0\r\n", response, sizeof(response), 5000);
     
+    // Enable automatic time zone and time update from network (NITZ)
+    sim7600e_gsm_send_at_command("AT+CTZU=1\r\n", response, sizeof(response), 5000);
+    ESP_LOGI(TAG, "Automatic network time update enabled");
+    
     ESP_LOGI(TAG, "Modem initialized successfully");
     return ESP_OK;
 }
@@ -315,6 +319,37 @@ esp_err_t sim7600e_gsm_get_network_info(sim7600e_network_info_t *info)
     return ESP_OK;
 }
 
+esp_err_t sim7600e_gsm_sync_ntp_time(const char *ntp_server)
+{
+    char response[256];
+    char cmd[128];
+    
+    // Use default NTP server if none provided
+    const char *server = (ntp_server != NULL) ? ntp_server : "pool.ntp.org";
+    
+    // Set NTP server
+    snprintf(cmd, sizeof(cmd), "AT+CNTP=\"%s\",0\r\n", server);
+    esp_err_t ret = sim7600e_gsm_send_at_command(cmd, response, sizeof(response), 5000);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set NTP server");
+        return ret;
+    }
+    
+    // Sync time with NTP server (may take several seconds)
+    ret = sim7600e_gsm_send_at_command("AT+CNTP\r\n", response, sizeof(response), 15000);
+    if (ret == ESP_OK) {
+        if (strstr(response, "+CNTP: 1") || strstr(response, "OK")) {
+            ESP_LOGI(TAG, "NTP time synchronized successfully");
+            return ESP_OK;
+        } else {
+            ESP_LOGW(TAG, "NTP sync response: %s", response);
+        }
+    }
+    
+    ESP_LOGW(TAG, "Failed to sync with NTP server");
+    return ESP_FAIL;
+}
+
 esp_err_t sim7600e_gsm_send_at_command(const char *cmd, char *response, size_t resp_size, uint32_t timeout_ms)
 {
     if (cmd == NULL || response == NULL || resp_size == 0) {
@@ -571,8 +606,38 @@ esp_err_t sim7600e_gsm_mqtt_subscribe(const char *topic, int qos)
         return ESP_FAIL;
     }
     
-    // Wait a moment for command to be processed
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    // Wait for prompt '>'
+    sim7600e_msg_t resp_msg;
+    TickType_t timeout_ticks = pdMS_TO_TICKS(5000); // 5s timeout for prompt
+    TickType_t start_time = xTaskGetTickCount();
+    bool got_prompt = false;
+    char combined_response[512] = {0};
+
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_prompt) {
+        // Check queues
+        if (xQueueReceive(resp_queue, &resp_msg, 50) == pdTRUE || xQueueReceive(urc_queue, &resp_msg, 50) == pdTRUE) {
+            ESP_LOGD(TAG, "Got resp: %s", resp_msg.data);
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) strcat(combined_response, " ");
+                    strcat(combined_response, resp_msg.data);
+            }
+            
+            if (strstr(resp_msg.data, ">")) {
+                got_prompt = true;
+            } else if (strstr(resp_msg.data, "ERROR")) {
+                xSemaphoreGive(mutex);
+                ESP_LOGE(TAG, "MQTT subscribe command failed: %s", resp_msg.data);
+                return ESP_FAIL;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    if (!got_prompt) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Timeout waiting for '>' prompt. Resp: %s", combined_response);
+        return ESP_ERR_TIMEOUT;
+    }
     
     // Step 2: Send topic with Ctrl+Z
     char topic_cmd[128];
@@ -586,10 +651,9 @@ esp_err_t sim7600e_gsm_mqtt_subscribe(const char *topic, int qos)
     }
     
     // Wait for subscription confirmation
-    char combined_response[512] = {0};
-    sim7600e_msg_t resp_msg;
-    TickType_t timeout_ticks = pdMS_TO_TICKS(10000);
-    TickType_t start_time = xTaskGetTickCount();
+    memset(combined_response, 0, sizeof(combined_response));
+    timeout_ticks = pdMS_TO_TICKS(10000);
+    start_time = xTaskGetTickCount();
     bool got_response = false;
     
     while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_response) {
@@ -680,8 +744,38 @@ esp_err_t sim7600e_gsm_mqtt_set_topic(const char *topic)
         return ESP_FAIL;
     }
     
-    // Wait for prompt
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // Wait for prompt '>'
+    sim7600e_msg_t resp_msg;
+    TickType_t timeout_ticks = pdMS_TO_TICKS(5000); // 5s timeout for prompt
+    TickType_t start_time = xTaskGetTickCount();
+    bool got_prompt = false;
+    char combined_response[256] = {0}; // Use a local buffer for this function
+
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_prompt) {
+        // Check queues
+        if (xQueueReceive(resp_queue, &resp_msg, 50) == pdTRUE || xQueueReceive(urc_queue, &resp_msg, 50) == pdTRUE) {
+            ESP_LOGD(TAG, "Got resp: %s", resp_msg.data);
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) strcat(combined_response, " ");
+                    strcat(combined_response, resp_msg.data);
+            }
+            
+            if (strstr(resp_msg.data, ">")) {
+                got_prompt = true;
+            } else if (strstr(resp_msg.data, "ERROR")) {
+                xSemaphoreGive(mutex);
+                ESP_LOGE(TAG, "MQTT topic command failed: %s", resp_msg.data);
+                return ESP_FAIL;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    if (!got_prompt) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Timeout waiting for '>' prompt. Resp: %s", combined_response);
+        return ESP_ERR_TIMEOUT;
+    }
     
     // Step 2: Send topic string
     ESP_LOGI(TAG, "Sending topic: %s", topic);
@@ -692,10 +786,9 @@ esp_err_t sim7600e_gsm_mqtt_set_topic(const char *topic)
     }
     
     // Wait for OK response
-    char combined_response[256] = {0};
-    sim7600e_msg_t resp_msg;
-    TickType_t timeout_ticks = pdMS_TO_TICKS(3000);
-    TickType_t start_time = xTaskGetTickCount();
+    memset(combined_response, 0, sizeof(combined_response));
+    timeout_ticks = pdMS_TO_TICKS(3000);
+    start_time = xTaskGetTickCount();
     bool got_response = false;
     
     while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_response) {
@@ -760,8 +853,38 @@ esp_err_t sim7600e_gsm_mqtt_set_payload(const char *payload)
         return ESP_FAIL;
     }
     
-    // Wait for prompt
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // Wait for prompt '>'
+    sim7600e_msg_t resp_msg;
+    TickType_t timeout_ticks = pdMS_TO_TICKS(5000); // 5s timeout for prompt
+    TickType_t start_time = xTaskGetTickCount();
+    bool got_prompt = false;
+    char combined_response[256] = {0};
+
+    while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_prompt) {
+        // Check queues
+        if (xQueueReceive(resp_queue, &resp_msg, 50) == pdTRUE || xQueueReceive(urc_queue, &resp_msg, 50) == pdTRUE) {
+            ESP_LOGD(TAG, "Got resp: %s", resp_msg.data);
+            if (strlen(combined_response) + strlen(resp_msg.data) < sizeof(combined_response) - 1) {
+                if (strlen(combined_response) > 0) strcat(combined_response, " ");
+                    strcat(combined_response, resp_msg.data);
+            }
+            
+            if (strstr(resp_msg.data, ">")) {
+                got_prompt = true;
+            } else if (strstr(resp_msg.data, "ERROR")) {
+                xSemaphoreGive(mutex);
+                ESP_LOGE(TAG, "MQTT payload command failed: %s", resp_msg.data);
+                return ESP_FAIL;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    if (!got_prompt) {
+        xSemaphoreGive(mutex);
+        ESP_LOGE(TAG, "Timeout waiting for '>' prompt. Resp: %s", combined_response);
+        return ESP_ERR_TIMEOUT;
+    }
     
     // Step 2: Send payload with Ctrl+Z
     char payload_with_terminator[512];
@@ -775,10 +898,9 @@ esp_err_t sim7600e_gsm_mqtt_set_payload(const char *payload)
     }
     
     // Wait for OK response
-    char combined_response[256] = {0};
-    sim7600e_msg_t resp_msg;
-    TickType_t timeout_ticks = pdMS_TO_TICKS(3000);
-    TickType_t start_time = xTaskGetTickCount();
+    memset(combined_response, 0, sizeof(combined_response));
+    timeout_ticks = pdMS_TO_TICKS(3000);
+    start_time = xTaskGetTickCount();
     bool got_response = false;
     
     while ((xTaskGetTickCount() - start_time) < timeout_ticks && !got_response) {

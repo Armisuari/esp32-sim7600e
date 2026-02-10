@@ -156,6 +156,20 @@ SemaphoreHandle_t sim7600e_get_gnss_semaphore(void);
 SemaphoreHandle_t sim7600e_get_mutex(void);
 int sim7600e_get_uart_port(void);
 
+/**
+ * @brief Suspend the UART reader task
+ * @note Use this before performing direct UART reads for binary data (e.g., HTTP downloads)
+ *       This prevents the UART reader task from consuming data intended for direct reads Calling this function will pause the task that normally processes UART data.
+ *       Remember to call sim7600e_resume_uart_task() when done.
+ */
+void sim7600e_suspend_uart_task(void);
+
+/**
+ * @brief Resume the UART reader task
+ * @note Call this after completing direct UART reads to restore normal operation
+ */
+void sim7600e_resume_uart_task(void);
+
 #ifdef __cplusplus
 }
 #endif
