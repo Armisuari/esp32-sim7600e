@@ -49,6 +49,10 @@ esp_err_t sim7600e_gsm_check_modem(void)
     sim7600e_gsm_send_at_command("AT+CREG=2\r\n", response, sizeof(response), 5000);
     sim7600e_gsm_send_at_command("ATE0\r\n", response, sizeof(response), 5000);
     
+    // Enable automatic time zone and time update from network (NITZ)
+    sim7600e_gsm_send_at_command("AT+CTZU=1\r\n", response, sizeof(response), 5000);
+    ESP_LOGI(TAG, "Automatic network time update enabled");
+    
     ESP_LOGI(TAG, "Modem initialized successfully");
     return ESP_OK;
 }
@@ -313,6 +317,37 @@ esp_err_t sim7600e_gsm_get_network_info(sim7600e_network_info_t *info)
     }
     
     return ESP_OK;
+}
+
+esp_err_t sim7600e_gsm_sync_ntp_time(const char *ntp_server)
+{
+    char response[256];
+    char cmd[128];
+    
+    // Use default NTP server if none provided
+    const char *server = (ntp_server != NULL) ? ntp_server : "pool.ntp.org";
+    
+    // Set NTP server
+    snprintf(cmd, sizeof(cmd), "AT+CNTP=\"%s\",0\r\n", server);
+    esp_err_t ret = sim7600e_gsm_send_at_command(cmd, response, sizeof(response), 5000);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set NTP server");
+        return ret;
+    }
+    
+    // Sync time with NTP server (may take several seconds)
+    ret = sim7600e_gsm_send_at_command("AT+CNTP\r\n", response, sizeof(response), 15000);
+    if (ret == ESP_OK) {
+        if (strstr(response, "+CNTP: 1") || strstr(response, "OK")) {
+            ESP_LOGI(TAG, "NTP time synchronized successfully");
+            return ESP_OK;
+        } else {
+            ESP_LOGW(TAG, "NTP sync response: %s", response);
+        }
+    }
+    
+    ESP_LOGW(TAG, "Failed to sync with NTP server");
+    return ESP_FAIL;
 }
 
 esp_err_t sim7600e_gsm_send_at_command(const char *cmd, char *response, size_t resp_size, uint32_t timeout_ms)
