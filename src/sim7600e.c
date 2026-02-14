@@ -415,7 +415,11 @@ static void uart_reader_task(void *arg)
                             // This is topic data - prefix it for identification
                             sim7600e_msg_t topic_msg;
                             memset(&topic_msg, 0, sizeof(topic_msg));
-                            snprintf(topic_msg.data, sizeof(topic_msg.data), "+CMQTTRXTOPIC_DATA:%s", msg.data);
+                            {
+                                const char *prefix = "+CMQTTRXTOPIC_DATA:";
+                                size_t max_copy = sizeof(topic_msg.data) - strlen(prefix) - 1;
+                                snprintf(topic_msg.data, sizeof(topic_msg.data), "%s%.*s", prefix, (int)max_copy, msg.data);
+                            }
                             if (s_sim7600e_ctx.urc_queue) {
                                 xQueueSend(s_sim7600e_ctx.urc_queue, &topic_msg, 0);
                             }
@@ -426,7 +430,11 @@ static void uart_reader_task(void *arg)
                             // This is payload data - prefix it for identification
                             sim7600e_msg_t payload_msg;
                             memset(&payload_msg, 0, sizeof(payload_msg));
-                            snprintf(payload_msg.data, sizeof(payload_msg.data), "+CMQTTRXPAYLOAD_DATA:%s", msg.data);
+                            {
+                                const char *prefix = "+CMQTTRXPAYLOAD_DATA:";
+                                size_t max_copy = sizeof(payload_msg.data) - strlen(prefix) - 1;
+                                snprintf(payload_msg.data, sizeof(payload_msg.data), "%s%.*s", prefix, (int)max_copy, msg.data);
+                            }
                             if (s_sim7600e_ctx.urc_queue) {
                                 xQueueSend(s_sim7600e_ctx.urc_queue, &payload_msg, 0);
                             }
